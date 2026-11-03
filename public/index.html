@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#02070d">
+<meta name="description" content="J.A.R.V.I.S. — assistente pessoal por voz para computador e Android.">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/jarvis.svg" type="image/svg+xml">
 <title>J.A.R.V.I.S.</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600&display=swap" rel="stylesheet">
@@ -18,6 +24,7 @@ html,body{height:100%;margin:0;overflow:hidden;background:radial-gradient(ellips
 header{display:flex;justify-content:space-between;align-items:baseline}
 header b{font-weight:600;letter-spacing:.32em;color:var(--c);text-shadow:0 0 12px #35e6ff88}
 #status{color:var(--dim);letter-spacing:.12em;font-size:15px}
+#instalar{display:none;border:1px solid var(--dim);border-radius:14px;background:#03101a;color:var(--c);padding:5px 10px;font:inherit;font-size:14px;cursor:pointer}
 body[data-s=listening] #status,body[data-s=speaking] #status,body[data-s=thinking] #status{color:var(--c)}
 main{flex:1;display:flex;align-items:flex-end;justify-content:center;pointer-events:none}
 #interim{color:#8fd8e6;text-align:center;min-height:1.4em;margin-bottom:8px;font-size:18px}
@@ -48,7 +55,7 @@ input[type=range]{accent-color:var(--c);width:110px}
 <canvas id="cena"></canvas>
 <div id="moldura"></div>
 <div class="ui">
-  <header><b>J.A.R.V.I.S.</b><span id="status">Em espera</span></header>
+  <header><b>J.A.R.V.I.S.</b><span style="display:flex;align-items:center;gap:10px"><button id="instalar" type="button">＋ Instalar</button><span id="status">Em espera</span></span></header>
   <main><div id="interim"></div></main>
   <footer>
     <div id="log"><div class="vazio" id="vazio">Toque no microfone e fale com o JARVIS.</div></div>
@@ -241,6 +248,7 @@ $('#enviar').onclick = () => { iniciarAudio(); const t = $('#txt').value; $('#tx
 $('#txt').onkeydown = e => { if (e.key === 'Enter') $('#enviar').click(); };
 $('#vol').oninput = e => { audio.volume = +e.target.value; };
 $('#cfg').onclick = () => { $('#ajustes').hidden = !$('#ajustes').hidden; };
+<script src="/jarvis-extras.js"></script>
 </script>
 </body>
 </html>
