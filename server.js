@@ -3,14 +3,14 @@ const express = require('express');
 const rateLimit = require('express-rate-limit');
 
 const {
-  GEMINI_API_KEY, ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID,
-  GEMINI_MODEL = 'gemini-3.7-flash',
+  GROQ_API_KEY, ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID,
+  GROQ_MODEL = 'llama-3.3-70b-versatile',
   ELEVENLABS_MODEL = 'eleven_multilingual_v2',
   FUSO_HORARIO = 'America/Sao_Paulo', PORT = 3000,
 } = process.env;
 
-for (const [k, v] of Object.entries({ GEMINI_API_KEY, ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID })) {
-  if (!v) { console.error(`Falta ${k} no arquivo .env`); process.exit(1); }
+for (const [k, v] of Object.entries({ GROQ_API_KEY, ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID })) {
+  if (!v) { console.error(`Falta ${k} nas variáveis de ambiente`); process.exit(1); }
 }
 
 const app = express();
@@ -33,26 +33,26 @@ app.post('/api/chat', async (req, res) => {
   const messages = validar(req.body.messages);
   if (!messages) return res.status(400).json({ error: 'Mensagem inválida.' });
   try {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_MODEL)}:generateContent`, {
+    const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
-      headers: { 'x-goog-api-key': GEMINI_API_KEY, 'content-type': 'application/json' },
+      headers: { Authorization: `Bearer ${GROQ_API_KEY}`, 'content-type': 'application/json' },
       body: JSON.stringify({
-        systemInstruction: { parts: [{ text: sistema() }] },
-        contents: messages.map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
-        generationConfig: { maxOutputTokens: 800 },
+        model: GROQ_MODEL,
+        max_tokens: 500,
+        messages: [{ role: 'system', content: sistema() }, ...messages],
       }),
     });
     const data = await r.json();
     if (!r.ok) {
-      console.error('Gemini:', r.status, JSON.stringify(data));
-      const msg = [400, 403].includes(r.status) ? 'Chave ou modelo do Gemini inválido.' : r.status === 404 ? 'Modelo do Gemini não encontrado. Troque GEMINI_MODEL.' : r.status === 429 ? 'Limite gratuito do Gemini atingido. Tente em instantes.' : 'Falha ao consultar o modelo.';
+      console.error('Groq:', r.status, JSON.stringify(data));
+      const msg = r.status === 401 ? 'Chave do Groq inválida.' : [400, 404].includes(r.status) ? 'Modelo do Groq inválido. Troque GROQ_MODEL.' : r.status === 429 ? 'Limite gratuito do Groq atingido. Tente mais tarde.' : 'Falha ao consultar o modelo.';
       return res.status(502).json({ error: msg });
     }
-    const text = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join(' ').trim();
+    const text = (data.choices?.[0]?.message?.content || '').trim();
     res.json({ text: text || 'Não consegui formular uma resposta, senhor.' });
   } catch (e) {
     console.error(e);
-    res.status(502).json({ error: 'Sem conexão com o Gemini.' });
+    res.status(502).json({ error: 'Sem conexão com o Groq.' });
   }
 });
 
