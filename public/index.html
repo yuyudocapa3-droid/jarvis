@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>J.A.R.V.I.S.</title>
+<style>
+:root{--bg:#030b14;--ciano:#35e6ff;--dim:#1b6f80;--txt:#cdeff5}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:radial-gradient(ellipse at 50% 30%,#06233a,var(--bg) 70%);color:var(--txt);font:16px/1.5 system-ui,sans-serif;display:flex;flex-direction:column;max-width:760px;margin:auto;padding:12px 16px env(safe-area-inset-bottom)}
+#orbe{flex:0 0 auto;height:34vh;min-height:190px;display:grid;place-items:center;position:relative}
+.nucleo{width:120px;height:120px;border-radius:50%;background:radial-gradient(circle,#bff8ff,var(--ciano) 35%,#0a5a70 70%,transparent 72%);box-shadow:0 0 50px var(--ciano);transition:.4s;animation:resp 4s ease-in-out infinite}
+.anel{position:absolute;border:1.5px solid var(--dim);border-radius:50%;width:170px;height:170px;border-top-color:var(--ciano);animation:gira 6s linear infinite}
+.anel.b{width:220px;height:220px;border-color:#0e3b49;border-bottom-color:var(--ciano);animation-duration:10s;animation-direction:reverse}
+@keyframes gira{to{transform:rotate(360deg)}}
+@keyframes resp{50%{transform:scale(1.07)}}
+@keyframes bate{50%{transform:scale(1.35)}}
+body[data-s=listening] .nucleo{animation:bate .8s ease-in-out infinite;filter:hue-rotate(-25deg)}
+body[data-s=thinking] .anel{animation-duration:1.2s}
+body[data-s=thinking] .anel.b{animation-duration:2s}
+body[data-s=speaking] .nucleo{animation:bate .35s ease-in-out infinite}
+#ondas{display:flex;gap:4px;align-items:center;justify-content:center;height:26px;opacity:0;transition:.3s}
+body[data-s=speaking] #ondas{opacity:1}
+#ondas i{width:4px;height:100%;background:var(--ciano);border-radius:2px;animation:onda .7s ease-in-out infinite}
+@keyframes onda{0%,100%{transform:scaleY(.2)}50%{transform:scaleY(1)}}
+#status{text-align:center;color:var(--ciano);min-height:1.5em;margin:4px 0}
+#interim{text-align:center;color:var(--dim);min-height:1.5em;font-size:14px}
+#log{flex:1;overflow-y:auto;border-top:1px solid #0e3b49;padding:10px 0;display:flex;flex-direction:column;gap:8px}
+.m{padding:8px 12px;border-radius:10px;max-width:88%;background:#08283a}
+.m.user{align-self:flex-end;background:#0b3c52}
+.m.err{color:#ff9b9b;background:#2a1010}
+.vazio{color:var(--dim);text-align:center;margin:auto}
+#barra{display:flex;gap:8px;align-items:center;padding:10px 0}
+#barra input[type=text]{flex:1;min-width:0;background:#06202f;border:1px solid var(--dim);color:var(--txt);border-radius:10px;padding:12px;font:inherit}
+button{background:#06202f;border:1px solid var(--dim);color:var(--ciano);border-radius:50%;width:48px;height:48px;font-size:20px;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--ciano);outline-offset:2px}
+#mic{width:60px;height:60px;border-color:var(--ciano);box-shadow:0 0 18px #35e6ff55}
+body[data-s=listening] #mic{background:var(--ciano);color:#001018}
+#ajustes{display:flex;gap:16px;font-size:13px;color:var(--dim);padding-bottom:8px;flex-wrap:wrap}
+#ajustes label{display:flex;gap:6px;align-items:center}
+@media(prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body data-s="idle">
+<div id="orbe"><div class="anel b"></div><div class="anel"></div><div class="nucleo"></div></div>
+<div id="ondas"><i></i><i style="animation-delay:.1s"></i><i style="animation-delay:.2s"></i><i style="animation-delay:.3s"></i><i style="animation-delay:.15s"></i><i style="animation-delay:.25s"></i><i style="animation-delay:.05s"></i></div>
+<div id="status">Em espera</div>
+<div id="interim"></div>
+<div id="log"><div class="vazio" id="vazio">Toque no microfone e fale.</div></div>
+<div id="barra">
+  <button id="mic" title="Falar" aria-label="Falar">🎤</button>
+  <input type="text" id="txt" placeholder="Ou digite aqui" maxlength="2000" autocomplete="off">
+  <button id="enviar" title="Enviar" aria-label="Enviar">➤</button>
+  <button id="parar" title="Interromper" aria-label="Interromper">■</button>
+</div>
+<div id="ajustes">
+  <label>Volume <input type="range" id="vol" min="0" max="1" step="0.05" value="1"></label>
+  <label>Velocidade da voz <input type="range" id="vel" min="0.7" max="1.2" step="0.05" value="1"></label>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const nomes = { idle: 'Em espera', listening: 'Ouvindo…', thinking: 'Processando…', speaking: 'Falando…' };
+let historico = [], estado = 'idle', rec = null, ctrl = null;
+const audio = new Audio();
+
+function setEstado(s) { estado = s; document.body.dataset.s = s; $('#status').textContent = nomes[s]; }
+function add(cls, texto) {
+  $('#vazio')?.remove();
+  const d = document.createElement('div');
+  d.className = 'm ' + cls;
+  d.textContent = (cls === 'user' ? 'Você: ' : cls === 'assistant' ? 'JARVIS: ' : '') + texto;
+  $('#log').append(d); $('#log').scrollTop = 1e9;
+}
+function parar(silencioso) {
+  ctrl?.abort(); ctrl = null;
+  audio.pause();
+  if (rec) { rec.onend = rec.onerror = null; rec.abort(); rec = null; }
+  $('#interim').textContent = '';
+  if (!silencioso) setEstado('idle');
+}
+async function perguntar(texto) {
+  texto = texto.trim(); if (!texto) return;
+  parar(true);
+  add('user', texto); historico.push({ role: 'user', content: texto }); setEstado('thinking');
+  ctrl = new AbortController();
+  try {
+    const r = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: historico.slice(-20) }), signal: ctrl.signal });
+    const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Falha na resposta.');
+    historico.push({ role: 'assistant', content: j.text }); add('assistant', j.text);
+    await falar(j.text);
+  } catch (e) {
+    if (e.name === 'AbortError') return;
+    if (historico.at(-1)?.role === 'user') historico.pop();
+    add('err', e.message); setEstado('idle');
+  }
+}
+async function falar(texto) {
+  const r = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: texto, speed: +$('#vel').value }), signal: ctrl?.signal });
+  if (!r.ok) { const j = await r.json().catch(() => ({})); add('err', j.error || 'Falha ao gerar a voz.'); setEstado('idle'); return; }
+  const url = URL.createObjectURL(await r.blob());
+  audio.src = url; audio.volume = +$('#vol').value;
+  audio.onended = () => { URL.revokeObjectURL(url); setEstado('idle'); };
+  setEstado('speaking');
+  await audio.play().catch(() => { add('err', 'O navegador bloqueou o áudio. Toque no microfone e tente de novo.'); setEstado('idle'); });
+}
+function ouvir() {
+  if (estado === 'listening') { rec?.stop(); return; }
+  if (!SR) { add('err', 'Este navegador não tem reconhecimento de voz. Use o Chrome ou digite.'); return; }
+  parar(true);
+  rec = new SR(); rec.lang = 'pt-BR'; rec.interimResults = true;
+  let final = '';
+  rec.onstart = () => setEstado('listening');
+  rec.onresult = e => { final = [...e.results].map(x => x[0].transcript).join(''); $('#interim').textContent = final; };
+  rec.onerror = e => { add('err', e.error === 'not-allowed' ? 'Permissão de microfone negada. Libere nas configurações do navegador.' : 'Erro no reconhecimento de voz: ' + e.error); setEstado('idle'); };
+  rec.onend = () => { $('#interim').textContent = ''; rec = null; final ? perguntar(final) : setEstado('idle'); };
+  rec.start();
+}
+$('#mic').onclick = ouvir;
+$('#parar').onclick = () => parar(false);
+$('#enviar').onclick = () => { const t = $('#txt').value; $('#txt').value = ''; perguntar(t); };
+$('#txt').onkeydown = e => { if (e.key === 'Enter') $('#enviar').click(); };
+$('#vol').oninput = e => { audio.volume = +e.target.value; };
+</script>
+</body>
+</html>
