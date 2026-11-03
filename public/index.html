@@ -2,75 +2,191 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#02070d">
 <title>J.A.R.V.I.S.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#030b14;--ciano:#35e6ff;--dim:#1b6f80;--txt:#cdeff5}
-*{box-sizing:border-box}
-html,body{height:100%;margin:0}
-body{background:radial-gradient(ellipse at 50% 30%,#06233a,var(--bg) 70%);color:var(--txt);font:16px/1.5 system-ui,sans-serif;display:flex;flex-direction:column;max-width:760px;margin:auto;padding:12px 16px env(safe-area-inset-bottom)}
-#orbe{flex:0 0 auto;height:34vh;min-height:190px;display:grid;place-items:center;position:relative}
-.nucleo{width:120px;height:120px;border-radius:50%;background:radial-gradient(circle,#bff8ff,var(--ciano) 35%,#0a5a70 70%,transparent 72%);box-shadow:0 0 50px var(--ciano);transition:.4s;animation:resp 4s ease-in-out infinite}
-.anel{position:absolute;border:1.5px solid var(--dim);border-radius:50%;width:170px;height:170px;border-top-color:var(--ciano);animation:gira 6s linear infinite}
-.anel.b{width:220px;height:220px;border-color:#0e3b49;border-bottom-color:var(--ciano);animation-duration:10s;animation-direction:reverse}
-@keyframes gira{to{transform:rotate(360deg)}}
-@keyframes resp{50%{transform:scale(1.07)}}
-@keyframes bate{50%{transform:scale(1.35)}}
-body[data-s=listening] .nucleo{animation:bate .8s ease-in-out infinite;filter:hue-rotate(-25deg)}
-body[data-s=thinking] .anel{animation-duration:1.2s}
-body[data-s=thinking] .anel.b{animation-duration:2s}
-body[data-s=speaking] .nucleo{animation:bate .35s ease-in-out infinite}
-#ondas{display:flex;gap:4px;align-items:center;justify-content:center;height:26px;opacity:0;transition:.3s}
-body[data-s=speaking] #ondas{opacity:1}
-#ondas i{width:4px;height:100%;background:var(--ciano);border-radius:2px;animation:onda .7s ease-in-out infinite}
-@keyframes onda{0%,100%{transform:scaleY(.2)}50%{transform:scaleY(1)}}
-#status{text-align:center;color:var(--ciano);min-height:1.5em;margin:4px 0}
-#interim{text-align:center;color:var(--dim);min-height:1.5em;font-size:14px}
-#log{flex:1;overflow-y:auto;border-top:1px solid #0e3b49;padding:10px 0;display:flex;flex-direction:column;gap:8px}
-.m{padding:8px 12px;border-radius:10px;max-width:88%;background:#08283a}
-.m.user{align-self:flex-end;background:#0b3c52}
-.m.err{color:#ff9b9b;background:#2a1010}
-.vazio{color:var(--dim);text-align:center;margin:auto}
-#barra{display:flex;gap:8px;align-items:center;padding:10px 0}
-#barra input[type=text]{flex:1;min-width:0;background:#06202f;border:1px solid var(--dim);color:var(--txt);border-radius:10px;padding:12px;font:inherit}
-button{background:#06202f;border:1px solid var(--dim);color:var(--ciano);border-radius:50%;width:48px;height:48px;font-size:20px;cursor:pointer}
-button:focus-visible,input:focus-visible{outline:2px solid var(--ciano);outline-offset:2px}
-#mic{width:60px;height:60px;border-color:var(--ciano);box-shadow:0 0 18px #35e6ff55}
-body[data-s=listening] #mic{background:var(--ciano);color:#001018}
-#ajustes{display:flex;gap:16px;font-size:13px;color:var(--dim);padding-bottom:8px;flex-wrap:wrap}
-#ajustes label{display:flex;gap:6px;align-items:center}
-@media(prefers-reduced-motion:reduce){*{animation:none!important}}
+:root{--c:#35e6ff;--dim:#14657a;--bg:#02070d;--t:#d4f6fb}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0;overflow:hidden;background:radial-gradient(ellipse at 50% 35%,#04162a,var(--bg) 70%);color:var(--t);font:500 17px/1.4 Rajdhani,system-ui,sans-serif}
+#cena{position:fixed;inset:0;width:100%;height:100%;display:block}
+#moldura{position:fixed;inset:10px;pointer-events:none;opacity:.55;background-repeat:no-repeat;background-image:linear-gradient(var(--c),var(--c)),linear-gradient(var(--c),var(--c)),linear-gradient(var(--c),var(--c)),linear-gradient(var(--c),var(--c)),linear-gradient(var(--c),var(--c)),linear-gradient(var(--c),var(--c)),linear-gradient(var(--c),var(--c)),linear-gradient(var(--c),var(--c));background-size:22px 1px,1px 22px,22px 1px,1px 22px,22px 1px,1px 22px,22px 1px,1px 22px;background-position:top left,top left,top right,top right,bottom left,bottom left,bottom right,bottom right}
+.ui{position:fixed;inset:0;display:flex;flex-direction:column;justify-content:space-between;padding:calc(22px + env(safe-area-inset-top)) 22px calc(18px + env(safe-area-inset-bottom));pointer-events:none}
+.ui>*{pointer-events:auto}
+header{display:flex;justify-content:space-between;align-items:baseline}
+header b{font-weight:600;letter-spacing:.32em;color:var(--c);text-shadow:0 0 12px #35e6ff88}
+#status{color:var(--dim);letter-spacing:.12em;font-size:15px}
+body[data-s=listening] #status,body[data-s=speaking] #status,body[data-s=thinking] #status{color:var(--c)}
+main{flex:1;display:flex;align-items:flex-end;justify-content:center;pointer-events:none}
+#interim{color:#8fd8e6;text-align:center;min-height:1.4em;margin-bottom:8px;font-size:18px}
+#log{max-height:25vh;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding:14px 0 8px;-webkit-mask-image:linear-gradient(transparent,#000 28%);mask-image:linear-gradient(transparent,#000 28%)}
+.m{padding:6px 12px;border-left:2px solid var(--c);background:linear-gradient(90deg,#0a3a4c66,transparent);max-width:92%}
+.m.user{align-self:flex-end;border-left:0;border-right:2px solid var(--dim);background:linear-gradient(270deg,#0a2a3a66,transparent);color:#9ccbd6;text-align:right}
+.m.err{border-color:#ff6b6b;color:#ffb0b0;background:linear-gradient(90deg,#3a101066,transparent)}
+.vazio{color:var(--dim);text-align:center;padding:8px}
+.fila{display:flex;align-items:center;justify-content:center;gap:22px;margin:6px 0 10px}
+.bt{width:44px;height:44px;border-radius:50%;border:1px solid var(--dim);background:#03101a99;backdrop-filter:blur(6px);color:var(--c);display:grid;place-items:center;font-size:18px;cursor:pointer;padding:0}
+.bt:active{transform:scale(.94)}
+#mic{width:70px;height:70px;border-color:var(--c);box-shadow:0 0 22px #35e6ff55,inset 0 0 14px #35e6ff33;position:relative}
+#mic::after{content:"";position:absolute;inset:-7px;border-radius:50%;border:1px solid var(--c);opacity:0}
+body[data-s=listening] #mic{background:#35e6ff;color:#001018}
+body[data-s=listening] #mic::after{animation:onda 1.1s ease-out infinite}
+@keyframes onda{from{opacity:.9;transform:scale(1)}to{opacity:0;transform:scale(1.5)}}
+.campo{display:flex;gap:8px}
+#txt{flex:1;min-width:0;background:#03101a99;backdrop-filter:blur(6px);border:1px solid var(--dim);color:var(--t);border-radius:22px;padding:11px 16px;font:inherit;font-size:16px}
+#txt::placeholder{color:#3d7c8c}
+:focus-visible{outline:2px solid var(--c);outline-offset:2px}
+#ajustes{display:flex;gap:18px;justify-content:center;color:var(--dim);font-size:14px;margin-top:10px;flex-wrap:wrap}
+#ajustes[hidden]{display:none}
+#ajustes label{display:flex;gap:8px;align-items:center}
+input[type=range]{accent-color:var(--c);width:110px}
 </style>
 </head>
 <body data-s="idle">
-<div id="orbe"><div class="anel b"></div><div class="anel"></div><div class="nucleo"></div></div>
-<div id="ondas"><i></i><i style="animation-delay:.1s"></i><i style="animation-delay:.2s"></i><i style="animation-delay:.3s"></i><i style="animation-delay:.15s"></i><i style="animation-delay:.25s"></i><i style="animation-delay:.05s"></i></div>
-<div id="status">Em espera</div>
-<div id="interim"></div>
-<div id="log"><div class="vazio" id="vazio">Toque no microfone e fale.</div></div>
-<div id="barra">
-  <button id="mic" title="Falar" aria-label="Falar">🎤</button>
-  <input type="text" id="txt" placeholder="Ou digite aqui" maxlength="2000" autocomplete="off">
-  <button id="enviar" title="Enviar" aria-label="Enviar">➤</button>
-  <button id="parar" title="Interromper" aria-label="Interromper">■</button>
+<canvas id="cena"></canvas>
+<div id="moldura"></div>
+<div class="ui">
+  <header><b>J.A.R.V.I.S.</b><span id="status">Em espera</span></header>
+  <main><div id="interim"></div></main>
+  <footer>
+    <div id="log"><div class="vazio" id="vazio">Toque no microfone e fale com o JARVIS.</div></div>
+    <div class="fila">
+      <button class="bt" id="cfg" aria-label="Ajustes">⚙</button>
+      <button class="bt" id="mic" aria-label="Falar"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+      <button class="bt" id="parar" aria-label="Interromper"><svg viewBox="0 0 24 24" width="18" height="18"><rect x="5" y="5" width="14" height="14" rx="2.5" fill="currentColor"/></svg></button>
+    </div>
+    <div class="campo">
+      <input type="text" id="txt" placeholder="Ou digite aqui" maxlength="2000" autocomplete="off">
+      <button class="bt" id="enviar" aria-label="Enviar"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+    </div>
+    <div id="ajustes" hidden>
+      <label>Volume <input type="range" id="vol" min="0" max="1" step="0.05" value="1"></label>
+      <label>Velocidade <input type="range" id="vel" min="0.7" max="1.2" step="0.05" value="1"></label>
+    </div>
+  </footer>
 </div>
-<div id="ajustes">
-  <label>Volume <input type="range" id="vol" min="0" max="1" step="0.05" value="1"></label>
-  <label>Velocidade da voz <input type="range" id="vel" min="0.7" max="1.2" step="0.05" value="1"></label>
-</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 const $ = s => document.querySelector(s);
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 const nomes = { idle: 'Em espera', listening: 'Ouvindo…', thinking: 'Processando…', speaking: 'Falando…' };
-let historico = [], estado = 'idle', rec = null, ctrl = null;
+let historico = [], estado = 'idle', rec = null, ctrl = null, ac = null, an = null, dados = null;
 const audio = new Audio();
 
+/* ---------- Cena 3D ---------- */
+function cena() {
+  const R = new THREE.WebGLRenderer({ canvas: $('#cena'), alpha: true, antialias: true });
+  R.setPixelRatio(Math.min(devicePixelRatio, 2));
+  const S = new THREE.Scene(), C = new THREE.PerspectiveCamera(50, 1, 0.1, 60);
+  const mundo = new THREE.Group(), orb = new THREE.Group();
+  S.add(mundo); mundo.add(orb);
+  const ADD = THREE.AdditiveBlending, N = 1800;
+
+  const pos0 = new Float32Array(N * 3), fase = new Float32Array(N), ga = Math.PI * (3 - Math.sqrt(5));
+  for (let i = 0; i < N; i++) {
+    const y = 1 - 2 * (i + 0.5) / N, r = Math.sqrt(1 - y * y), a = ga * i;
+    pos0[i * 3] = Math.cos(a) * r; pos0[i * 3 + 1] = y; pos0[i * 3 + 2] = Math.sin(a) * r;
+    fase[i] = Math.random() * 6.283;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N * 3), 3));
+  const pts = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0x35e6ff, size: 0.05, transparent: true, opacity: 0.95, blending: ADD, depthWrite: false }));
+  orb.add(pts);
+
+  orb.add(new THREE.LineSegments(new THREE.WireframeGeometry(new THREE.IcosahedronGeometry(1.6, 1)),
+    new THREE.LineBasicMaterial({ color: 0x35e6ff, transparent: true, opacity: 0.13, blending: ADD })));
+
+  const nucleo = new THREE.Mesh(new THREE.SphereGeometry(0.36, 24, 24),
+    new THREE.MeshBasicMaterial({ color: 0xbff8ff, transparent: true, opacity: 0.9 }));
+  orb.add(nucleo);
+
+  const cv = document.createElement('canvas'); cv.width = cv.height = 128;
+  const x = cv.getContext('2d'), g = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+  g.addColorStop(0, 'rgba(170,246,255,.9)'); g.addColorStop(0.35, 'rgba(53,230,255,.25)'); g.addColorStop(1, 'rgba(53,230,255,0)');
+  x.fillStyle = g; x.fillRect(0, 0, 128, 128);
+  const brilho = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), blending: ADD, transparent: true, depthWrite: false }));
+  mundo.add(brilho);
+
+  const aneis = [];
+  [[1.95, 0.008, 6.283, [1.2, 0, 0], 0.35], [2.3, 0.006, 4.2, [0.4, 0.9, 0], -0.5],
+   [2.65, 0.01, 3.1, [-0.9, 0.3, 0], 0.25], [3.0, 0.005, 5.2, [0.2, -0.6, 0.8], -0.18]].forEach(([r, t, arc, rot, v]) => {
+    const m = new THREE.Mesh(new THREE.TorusGeometry(r, t, 6, 120, arc),
+      new THREE.MeshBasicMaterial({ color: 0x35e6ff, transparent: true, opacity: 0.65, blending: ADD, depthWrite: false }));
+    m.rotation.set(rot[0], rot[1], rot[2]); m.userData.v = v; orb.add(m); aneis.push(m);
+  });
+
+  const np = 500, pp = new Float32Array(np * 3);
+  for (let i = 0; i < np; i++) {
+    const r = 5 + Math.random() * 8, a = Math.random() * 6.283, b = Math.acos(2 * Math.random() - 1);
+    pp[i * 3] = r * Math.sin(b) * Math.cos(a); pp[i * 3 + 1] = r * Math.sin(b) * Math.sin(a); pp[i * 3 + 2] = r * Math.cos(b);
+  }
+  const pg = new THREE.BufferGeometry(); pg.setAttribute('position', new THREE.BufferAttribute(pp, 3));
+  const poeira = new THREE.Points(pg, new THREE.PointsMaterial({ color: 0x6fdcf0, size: 0.04, transparent: true, opacity: 0.35, blending: ADD, depthWrite: false }));
+  S.add(poeira);
+
+  let esc = 1, mx = 0, my = 0, nivel = 0, ult = '', t0 = performance.now();
+  const cores = { idle: 0x35e6ff, listening: 0x9ff5ff, thinking: 0x4fa3ff, speaking: 0x35e6ff };
+  addEventListener('pointermove', e => { mx = e.clientX / innerWidth - 0.5; my = e.clientY / innerHeight - 0.5; });
+  function ajustar() {
+    const w = innerWidth, h = innerHeight, p = w / h < 0.8;
+    R.setSize(w, h, false); C.aspect = w / h; C.updateProjectionMatrix();
+    C.position.z = p ? 8.5 : 6.5; esc = p ? 0.7 : 1; orb.scale.setScalar(esc); mundo.position.y = p ? 1.1 : 0.2;
+  }
+  addEventListener('resize', ajustar); ajustar();
+
+  function quadro(now) {
+    requestAnimationFrame(quadro);
+    const dt = Math.min((now - t0) / 1000, 0.05), t = now / 1000; t0 = now;
+    const s = estado; let alvo = 0.06 + 0.03 * Math.sin(t * 1.5);
+    if (s === 'listening') alvo = 0.25 + 0.12 * Math.sin(t * 7);
+    else if (s === 'thinking') alvo = 0.3 + 0.1 * Math.sin(t * 12);
+    else if (s === 'speaking') {
+      if (an && dados) { an.getByteFrequencyData(dados); let m = 0; for (let i = 0; i < dados.length; i++) m += dados[i]; alvo = Math.min(1, m / dados.length / 100); }
+      else alvo = 0.4 + 0.3 * Math.abs(Math.sin(t * 9));
+    }
+    nivel += (alvo - nivel) * Math.min(1, dt * 10);
+    if (s !== ult) { ult = s; pts.material.color.setHex(cores[s]); }
+    const vel = s === 'thinking' ? 3.2 : s === 'listening' ? 1.5 : 1;
+    orb.rotation.y += dt * 0.25 * vel; orb.rotation.x = Math.sin(t * 0.3) * 0.12 + my * 0.4; mundo.rotation.y = mx * 0.4;
+    aneis.forEach(a => { a.rotation.z += a.userData.v * dt * vel * (1 + nivel * 2); });
+    const a = geo.attributes.position.array;
+    for (let i = 0; i < N; i++) {
+      const r = 1.3 + 0.03 * Math.sin(fase[i] + t * 2) + nivel * 0.38 * Math.sin(fase[i] * 3 + t * 10);
+      a[i * 3] = pos0[i * 3] * r; a[i * 3 + 1] = pos0[i * 3 + 1] * r; a[i * 3 + 2] = pos0[i * 3 + 2] * r;
+    }
+    geo.attributes.position.needsUpdate = true;
+    nucleo.scale.setScalar(1 + nivel * 0.9); nucleo.material.opacity = 0.6 + nivel * 0.4;
+    brilho.scale.setScalar((3.8 + nivel * 3.2) * esc);
+    poeira.rotation.y += dt * 0.02;
+    R.render(S, C);
+  }
+  requestAnimationFrame(quadro);
+}
+try { if (window.THREE) cena(); } catch (e) { console.warn('Cena 3D indisponível', e); }
+
+/* ---------- Áudio reativo ---------- */
+function iniciarAudio() {
+  try {
+    if (!ac) {
+      ac = new (window.AudioContext || window.webkitAudioContext)();
+      an = ac.createAnalyser(); an.fftSize = 64;
+      const src = ac.createMediaElementSource(audio);
+      src.connect(an); an.connect(ac.destination);
+      dados = new Uint8Array(an.frequencyBinCount);
+    }
+    if (ac.state === 'suspended') ac.resume();
+  } catch (e) { console.warn(e); }
+}
+
+/* ---------- Conversa ---------- */
 function setEstado(s) { estado = s; document.body.dataset.s = s; $('#status').textContent = nomes[s]; }
 function add(cls, texto) {
   $('#vazio')?.remove();
   const d = document.createElement('div');
   d.className = 'm ' + cls;
-  d.textContent = (cls === 'user' ? 'Você: ' : cls === 'assistant' ? 'JARVIS: ' : '') + texto;
+  d.textContent = texto;
   $('#log').append(d); $('#log').scrollTop = 1e9;
 }
 function parar(silencioso) {
@@ -102,10 +218,12 @@ async function falar(texto) {
   const url = URL.createObjectURL(await r.blob());
   audio.src = url; audio.volume = +$('#vol').value;
   audio.onended = () => { URL.revokeObjectURL(url); setEstado('idle'); };
+  if (ac && ac.state === 'suspended') await ac.resume().catch(() => {});
   setEstado('speaking');
   await audio.play().catch(() => { add('err', 'O navegador bloqueou o áudio. Toque no microfone e tente de novo.'); setEstado('idle'); });
 }
 function ouvir() {
+  iniciarAudio();
   if (estado === 'listening') { rec?.stop(); return; }
   if (!SR) { add('err', 'Este navegador não tem reconhecimento de voz. Use o Chrome ou digite.'); return; }
   parar(true);
@@ -119,9 +237,10 @@ function ouvir() {
 }
 $('#mic').onclick = ouvir;
 $('#parar').onclick = () => parar(false);
-$('#enviar').onclick = () => { const t = $('#txt').value; $('#txt').value = ''; perguntar(t); };
+$('#enviar').onclick = () => { iniciarAudio(); const t = $('#txt').value; $('#txt').value = ''; perguntar(t); };
 $('#txt').onkeydown = e => { if (e.key === 'Enter') $('#enviar').click(); };
 $('#vol').oninput = e => { audio.volume = +e.target.value; };
+$('#cfg').onclick = () => { $('#ajustes').hidden = !$('#ajustes').hidden; };
 </script>
 </body>
 </html>
