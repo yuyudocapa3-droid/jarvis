@@ -69,6 +69,21 @@ input[type=range]{accent-color:var(--c);width:80px}
 #boot{position:fixed;inset:0;z-index:9;background:#01060c;display:grid;place-content:center;color:var(--c);letter-spacing:.2em;font-size:13px;pointer-events:none;animation:sum .6s 2s forwards}
 #boot p{margin:3px 0;opacity:0;animation:ap .4s forwards}
 @keyframes ap{to{opacity:1}}@keyframes sum{to{opacity:0;visibility:hidden}}
+#dock{background:#01060cf2}
+#holo{position:fixed;left:0;right:0;top:0;bottom:var(--dk,150px);z-index:2;background:#01060cf5;display:flex;flex-direction:column;padding:calc(8px + env(safe-area-inset-top)) 12px 6px}
+#holo[hidden]{display:none}
+.hh{display:flex;justify-content:space-between;align-items:center;gap:8px;color:var(--c);letter-spacing:.18em;font-weight:600}
+#hv{position:relative;flex:0 0 44%;min-height:190px;border:1px solid var(--d);margin:6px 0;background:radial-gradient(#06233a77,transparent 70%)}
+#hc{width:100%;height:100%;display:block;touch-action:none}
+#hl{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.hlb{position:absolute;transform:translate(10px,-50%);font-size:11px;letter-spacing:.1em;color:#d4f6fb;background:#03121cd0;border-left:2px solid var(--c);padding:1px 6px;white-space:nowrap}
+.hlb::before{content:"";position:absolute;left:-11px;top:50%;width:8px;height:8px;margin-top:-4px;border-radius:50%;background:var(--c);box-shadow:0 0 8px var(--c)}
+.hctl{display:flex;gap:6px;margin-bottom:6px}.hctl .chip{flex:1;border-radius:4px;text-align:center}
+.hctl .chip.on{background:var(--c);color:#001018}
+#hi{flex:1;overflow-y:auto;font-size:calc(14px*var(--z))}
+.hex{border-left:2px solid var(--c);padding:4px 10px;margin-bottom:6px;background:linear-gradient(90deg,#0a3a4c66,transparent)}
+.hex.us{border-color:var(--d);color:#9ccbd6}.hex.er{border-color:#ff6b6b;color:#ffb0b0}
+.hpt{padding:3px 0;border-bottom:1px solid #35e6ff14;font-size:.88em}.hpt b{color:var(--c);letter-spacing:.1em}
 </style></head>
 <body data-s="idle">
 <canvas id="fx"></canvas><div id="moldura"></div>
@@ -116,6 +131,12 @@ input[type=range]{accent-color:var(--c);width:80px}
   <div id="ajustes" hidden><label>Volume <input type="range" id="vol" min="0" max="1" step="0.05" value="1"></label><label>Velocidade <input type="range" id="vel" min="0.7" max="1.2" step="0.05" value="1"></label><label><input type="checkbox" id="vl" checked> Voz nos atalhos</label></div>
  </div>
 </div>
+<section id="holo" hidden>
+ <div class="hh"><span id="ht">HOLOGRAMA</span><button class="bt" id="hx" aria-label="Fechar">✕</button></div>
+ <div id="hv"><canvas id="hc"></canvas><div id="hl"></div></div>
+ <div class="hctl"><button class="chip" id="hexp">EXPLODIR</button><button class="chip" id="hgiro">GIRAR</button><button class="chip" id="hzm">−</button><button class="chip" id="hzp">+</button></div>
+ <div id="hi"></div>
+</section>
 <div id="boot"><div><p>INICIALIZANDO NÚCLEO…</p><p style="animation-delay:.5s">CARREGANDO PROTOCOLOS…</p><p style="animation-delay:1s">SISTEMAS: ONLINE</p><p style="animation-delay:1.4s">BEM-VINDO, SENHOR.</p></div></div>
 
 <script>
@@ -186,4 +207,244 @@ var tim,fim;
 function bip(){try{var c=new AudioContext();[0,.35,.7].forEach(function(d){var o=c.createOscillator(),g=c.createGain();o.connect(g);g.connect(c.destination);o.frequency.value=880;g.gain.value=.15;o.start(c.currentTime+d);o.stop(c.currentTime+d+.2)})}catch(e){}}
 function timer(s){clearInterval(tim);fim=Date.now()+s*1e3;tim=setInterval(function(){var r=Math.ceil((fim-Date.now())/1e3);$('#tmr').textContent=r>0?fmt(r):'--:--';if(r<=0){clearInterval(tim);bip();dizer('O tempo acabou, senhor.')}},500)}
 async function climaDados(){
- var p=awai
+ var p=await new Promise(function(ok,er){navigator.geolocation.getCurrentPosition(ok,er,{timeout:9000})}).catch(function(){return null});if(!p)return null;
+ var d=(await(await fetch('https://api.open-meteo.com/v1/forecast?latitude='+p.coords.latitude+'&longitude='+p.coords.longitude+'&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code&timezone=auto')).json()).current,c=d.weather_code;
+ d.w=c==0?'céu limpo':c<4?'parcialmente nublado':c<50?'neblina':(c<70||(c>=80&&c<90))?'chuva':c<80?'neve':'tempestade';
+ $('#cl').innerHTML=kv('TEMP',Math.round(d.temperature_2m)+' °C')+kv('SENSAÇÃO',Math.round(d.apparent_temperature)+' °C')+kv('UMIDADE',d.relative_humidity_2m+'%')+kv('VENTO',Math.round(d.wind_speed_10m)+' km/h')+kv('CÉU',d.w.toUpperCase());return d}
+async function clima(){var d=await climaDados();return d?'Agora faz '+Math.round(d.temperature_2m)+' graus, sensação de '+Math.round(d.apparent_temperature)+', com '+d.w+', senhor.':'Preciso da permissão de localização para ver o clima, senhor.'}
+function nota(t){var n=$('#nota');n.value+=(n.value?'\n':'')+'• '+t;try{localStorage.jv_nota=n.value}catch(e){}}
+window.cmd=async function(t){
+ var n=norm(t).replace(/^(?:ei |oi |ola )?jarvis /,'').replace(/ por favor$/,''),m;
+ if(/^(?:para|pare|cancela|silencio|chega)$/.test(n)){parar(false);return 1}
+ if(/^(?:fecha|fechar|esconde|some com) (?:o |a )?(?:holograma|3d|modelo|visualizador)$/.test(n)){holoFechar();return dizer('Holograma encerrado, senhor.')}
+ if(/^(?:como funciona|como funcionam|me explica|me explique|explica|explique|mostra em 3d|mostre em 3d|mostra o modelo|holograma|simula)\b/.test(n)||/\bem 3d\b/.test(n))return explicar(t);
+ if(m=n.match(/^(?:mostra|mostrar|abre|abrir|vai pro|vai pra|vai para|ir para) (?:o |a |no |na )?(nucleo|sistema|arsenal|hud|painel|hub|menu|apps|aplicativos)$/)){pagina(/nucleo/.test(m[1])?0:/sistema|hud|painel/.test(m[1])?1:2);return dizer('Certamente, senhor.')}
+ if(m=n.match(/^(aumenta|amplia|diminui|reduz)(?: o| a)? ?(?:hud|painel|interface|zoom|tela)?$/)){zoom(/aumenta|amplia/.test(m[1])?.2:-.2);return dizer('Feito, senhor.')}
+ if(/^(?:ajuda|comandos|o que voce (?:sabe|pode) fazer)$/.test(n))return dizer('Posso abrir aplicativos, tocar músicas, pesquisar, traçar rotas, ligar, mandar WhatsApp, criar temporizadores e notas, calcular, ver o clima, trocar de tela e mudar a cor da interface, senhor.');
+ if(m=n.match(/^(?:toca|tocar|toque|coloca|bota|ouvir|ouve|quero ouvir) (.+?)(?: no (youtube|spotify))?$/)){var s=m[1];return m[2]=='youtube'?go('YouTube · '+s,'https://www.youtube.com/results?search_query='+q(s),'Procurando '+s+' no YouTube, senhor.'):go('Spotify · '+s,'spotify:search:'+q(s),'Abrindo '+s+' no Spotify, senhor.')}
+ if(m=n.match(/^(?:abre|abrir|abra|inicia|iniciar|lanca|vai pro|vai pra|vai para|entra no|entra na) (?:o |a |no |na )?(.+)$/)){var a=achaApp(m[1]);return a?go(a[0],a[2],'Abrindo '+a[0]+', senhor.'):dizer('Esse aplicativo não está no meu arsenal, senhor.')}
+ if(m=n.match(/^(?:pesquisa|pesquisar|busca|buscar|procura|procurar|google) (?:por |sobre )?(.+?)(?: no (youtube|maps|mapa))?$/)){var s2=m[1],w=m[2];
+  return w=='youtube'?go('YouTube · '+s2,'https://www.youtube.com/results?search_query='+q(s2),'Procurando '+s2+' no YouTube, senhor.'):w?go('Maps · '+s2,'https://www.google.com/maps/search/?api=1&query='+q(s2),'Procurando '+s2+' no mapa, senhor.'):go('Google · '+s2,'https://www.google.com/search?q='+q(s2),'Pesquisando '+s2+', senhor.')}
+ if(m=n.match(/^(?:rota|navega|navegar|como chego|como chegar|me leva|leva me|ir) (?:para |pra |ate |em |no |na |ao |a |o )?(.+)$/))return go('Rota · '+m[1],'https://www.google.com/maps/dir/?api=1&destination='+q(m[1]),'Traçando a rota para '+m[1]+', senhor.');
+ if((m=n.match(/^(?:onde fica|onde tem|onde encontro|onde acho) (.+)$/))||(m=n.match(/^(.+) (?:perto de mim|mais proximo|por aqui)$/)))return go('Maps · '+m[1],'https://www.google.com/maps/search/?api=1&query='+q(m[1]),'Procurando '+m[1]+' por perto, senhor.');
+ if(m=n.match(/^(?:manda|mandar|envia|enviar) (?:uma )?(?:mensagem|msg|zap|whatsapp)(?: no whatsapp)? (?:para|pra) ([\d ]{8,})(?: (?:dizendo|falando|que) (.+))?$/)){var d=m[1].replace(/\s/g,'');if(d.length<=11)d='55'+d;return go('WhatsApp · '+d,'https://wa.me/'+d+(m[2]?'?text='+q(m[2]):''),'Abrindo o WhatsApp, senhor.')}
+ if(m=n.match(/^(?:liga|ligar|chama|chamar|telefona) (?:para |pra )?([\d ]{3,})$/))return go('Ligar · '+m[1],'tel:'+m[1].replace(/\s/g,''),'Preparando a ligação, senhor.');
+ if(/^(?:liga|ligar|chama|chamar) /.test(n))return dizer('Não tenho acesso aos seus contatos, senhor. Diga o número, ou abra o telefone.');
+ if(m=n.match(/(?:timer|temporizador|cronometro|me avisa|avisa|alarme) (?:de |em |para |daqui a )?(\d+) ?(segundos?|seg|minutos?|min|horas?|h)\b/)){var k=m[2][0]=='h'?3600:m[2][0]=='m'?60:1;timer(+m[1]*k);return dizer('Temporizador de '+m[1]+' '+m[2]+' iniciado, senhor.')}
+ if(m=n.match(/^(?:anota|anotar|anote|lembra|lembrar) (?:que |de )?(.+)$/)){nota(m[1]);return dizer('Anotado, senhor.')}
+ if(m=t.toLowerCase().match(/(?:calcula|calcular|quanto (?:é|e|eh|da|dá)|quanto fica) (.+?)\??$/)){
+  var e=m[1].replace(/,/g,'.').replace(/ mais /g,'+').replace(/ menos /g,'-').replace(/ vezes | x /g,'*').replace(/ dividido por /g,'/').replace(/ por cento/g,'%');
+  if(/^[\d+\-*/().%\s]+$/.test(e)){var r=Function('"use strict";return ('+e.replace(/(\d+(?:\.\d+)?)%/g,'($1/100)')+')')();return dizer(e.trim()+' é igual a '+(Math.round(r*1e6)/1e6).toLocaleString('pt-BR')+', senhor.')}}
+ if(/\bque horas\b|^horas$|hora certa/.test(n))return dizer('São '+new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})+', senhor.');
+ if(/que dia|data de hoje|dia da semana/.test(n))return dizer('Hoje é '+new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+', senhor.');
+ if(/bateria/.test(n))return dizer(G.bat?'A bateria está em '+Math.round(G.bat.level*100)+' por cento, senhor.':'Não consigo ler a bateria neste navegador, senhor.');
+ if(/clima|temperatura|vai chover|tempo (?:hoje|agora|la fora)/.test(n))return dizer(await clima());
+ if(m=n.match(/(?:modo|tema|cor) (azul|vermelho|dourado|verde|roxo|laranja)/)){tema(CORES[m[1]]);return dizer('Interface ajustada, senhor.')}
+ return 0};
+try{if(localStorage.jv_tema)tema(localStorage.jv_tema);if(localStorage.jv_z)zoom(+localStorage.jv_z-G.Z);$('#nota').value=localStorage.jv_nota||'';$('#nota').addEventListener('input',function(){localStorage.jv_nota=$('#nota').value})}catch(e){}
+APPS.forEach(function(a){var l=document.createElement('a');l.className='tile';l.href=a[2];if(/^https?:/.test(a[2]))l.target='_blank';l.innerHTML='<i>'+a[1]+'</i>'+a[0];$('#apps').appendChild(l)});
+Object.keys(CORES).forEach(function(k){var b=document.createElement('button');b.className='dot';b.style.background=CORES[k];b.setAttribute('aria-label','Cor '+k);b.addEventListener('click',function(){tema(CORES[k])});$('#temas').appendChild(b)});
+document.querySelectorAll('[data-c]').forEach(function(c){c.addEventListener('click',function(){iniciarAudio();perguntar(c.getAttribute('data-c'))})});
+document.querySelectorAll('[data-t]').forEach(function(c){c.addEventListener('click',function(){iniciarAudio();perguntar('timer '+c.getAttribute('data-t'))})});
+$('#cl').addEventListener('click',function(){climaDados().then(function(d){if(!d)$('#cl').innerHTML=kv('STATUS','localização negada')}).catch(function(){$('#cl').innerHTML=kv('STATUS','falha ao consultar')})});
+</script>
+
+<script>
+/* ===== PARTE 3: HUD, TELEMETRIA E REATOR ARC ===== */
+var dpr=1,fh=[],vh=[],ph=[],cv=$('#fx'),x=cv.getContext('2d');
+function bar(p){return '<div class="bar"><i style="width:'+Math.max(0,Math.min(100,p))+'%"></i></div>'}
+window.sz=function(){document.querySelectorAll('canvas.sp').forEach(function(s){s.width=s.clientWidth*dpr;s.height=s.clientHeight*dpr})};
+function dim(){dpr=Math.min(window.devicePixelRatio||1,2);cv.width=innerWidth*dpr;cv.height=innerHeight*dpr;window.sz()}
+addEventListener('resize',dim);
+function spark(id,a,m){var c=$(id),g=c.getContext('2d'),w=c.width,h=c.height;if(!w)return;g.clearRect(0,0,w,h);g.strokeStyle='rgb('+G.COR+')';g.lineWidth=dpr;g.beginPath();a.forEach(function(v,i){var px=i/59*w,py=h-Math.min(1,v/m)*(h-2)-1;i?g.lineTo(px,py):g.moveTo(px,py)});g.stroke()}
+function tele(){var n=navigator,c=n.connection||{},d=new Date(),S=G.S,b=G.bat,lt=S.lat.length?Math.round(S.lat.reduce(function(a,b){return a+b})/S.lat.length)+' ms':'--',pm=performance.memory;
+ $('#hora').textContent=d.toLocaleTimeString('pt-BR');$('#dt').textContent=d.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'short'}).toUpperCase();
+ $('#cnL').innerHTML='NÚCLEO ARC<br>'+(G.e=='idle'?'ESTÁVEL':NOMES[G.e])+'<br>'+G.fps+' FPS';
+ $('#cnR').innerHTML='BAT '+(b?Math.round(b.level*100)+'%'+(b.charging?'⚡':''):'--')+'<br>'+(n.onLine?(c.effectiveType||'ON').toUpperCase():'OFFLINE')+'<br>'+(n.hardwareConcurrency||'--')+' CORES';
+ $('#srv').innerHTML=kv('RENDER',G.V.host)+kv('GROQ',G.V.chat)+kv('ELEVENLABS',G.V.tts);
+ $('#ses').innerHTML=kv('MENSAGENS',S.m)+kv('LOCAIS',S.l)+kv('IA',S.i)+kv('ÁUDIOS',S.v)+kv('LAT. IA',lt)+kv('SESSÃO',fmt(Math.floor((Date.now()-S.t0)/1e3)));
+ $('#rede').innerHTML=kv('STATUS',n.onLine?'ONLINE':'OFFLINE')+kv('TIPO',(c.effectiveType||'--').toUpperCase())+kv('DOWNLINK',c.downlink?c.downlink+' Mbps':'--')+kv('LATÊNCIA',c.rtt?c.rtt+' ms':'--')+kv('ECONOMIA',c.saveData?'LIGADA':'DESLIGADA');
+ $('#bat').innerHTML=b?kv('NÍVEL',Math.round(b.level*100)+'%')+bar(b.level*100)+kv('ENERGIA',b.charging?'CARREGANDO':'BATERIA'):kv('BATERIA','indisponível');
+ $('#dev').innerHTML=kv('NÚCLEOS',n.hardwareConcurrency||'--')+kv('RAM',(n.deviceMemory||'--')+' GB')+kv('TELA',screen.width+'×'+screen.height)+kv('IDIOMA',n.language)+kv('FUSO',Intl.DateTimeFormat().resolvedOptions().timeZone);
+ $('#perf').innerHTML=kv('FPS',G.fps)+(pm?kv('HEAP JS',Math.round(pm.usedJSHeapSize/1048576)+' MB'):'')+kv('RESPOSTA IA',lt)+kv('SERVIDOR',G.V.host)}
+async function disco(){try{var e=await navigator.storage.estimate();$('#dsk').innerHTML=kv('USADO',(e.usage/1048576).toFixed(1)+' MB')+kv('COTA',Math.round(e.quota/1048576)+' MB')+bar(e.usage/e.quota*100)}catch(e){$('#dsk').innerHTML=kv('STATUS','indisponível')}}
+async function ping(){var t=performance.now();try{await fetch('/?p='+t,{method:'HEAD',cache:'no-store'});var m=Math.round(performance.now()-t);G.V.host=m+' ms';ph.push(m/800)}catch(e){G.V.host='OFFLINE';ph.push(1)}if(ph.length>60)ph.shift()}
+function arc(cx,cy,r,a0,a1,lw,al){x.beginPath();x.arc(cx,cy,r,a0,a1);x.lineWidth=lw*dpr;x.strokeStyle='rgba('+G.COR+','+al+')';x.stroke()}
+function tri(cx,cy,r,rot){x.beginPath();for(var i=0;i<3;i++){var a=rot+i*2.0944-1.5708,px=cx+Math.cos(a)*r,py=cy+Math.sin(a)*r;i?x.lineTo(px,py):x.moveTo(px,py)}x.closePath()}
+var ang=0,t0=performance.now(),fr=0,tf=t0,ta=t0,C=G.COR;
+function quadro(now){requestAnimationFrame(quadro);
+ var dt=Math.min((now-t0)/1000,.05),t=now/1000;t0=now;fr++;C=G.COR;
+ if(now-tf>1000){G.fps=fr;fr=0;tf=now;fh.push(G.fps/60);if(fh.length>60)fh.shift()}
+ var alvo=.05+.03*Math.sin(t*1.5);
+ if(G.e=='listening')alvo=.25+.12*Math.sin(t*7);else if(G.e=='thinking')alvo=.3+.1*Math.sin(t*12);
+ else if(G.e=='speaking'){if(G.an&&G.dados){G.an.getByteFrequencyData(G.dados);var m=0;for(var i=0;i<G.dados.length;i++)m+=G.dados[i];alvo=Math.min(1,m/G.dados.length/100)}else alvo=.4+.3*Math.abs(Math.sin(t*9))}
+ G.nivel+=(alvo-G.nivel)*Math.min(1,dt*10);var N=G.nivel;
+ if(now-ta>300){ta=now;vh.push(N);if(vh.length>60)vh.shift();spark('#spf',fh,1);spark('#spv',vh,1);spark('#spp',ph,1)}
+ var W=cv.width,H=cv.height;x.setTransform(1,0,0,1,0,0);x.clearRect(0,0,W,H);x.globalCompositeOperation='lighter';
+ x.strokeStyle='rgba('+C+',.05)';x.lineWidth=dpr;x.beginPath();
+ for(var g=0;g<W;g+=40*dpr){x.moveTo(g,0);x.lineTo(g,H)}for(var g2=0;g2<H;g2+=40*dpr){x.moveTo(0,g2);x.lineTo(W,g2)}x.stroke();
+ var r0=$('#alvo').getBoundingClientRect();
+ if(r0.bottom>0&&r0.top<innerHeight&&r0.right>0&&r0.left<innerWidth){
+  var cx=(r0.left+r0.width/2)*dpr,cy=(r0.top+r0.height/2)*dpr,R=Math.min(r0.width*.4,r0.height*.46)*dpr,vel=G.e=='thinking'?3:G.e=='listening'?1.6:1;ang+=dt*vel;
+  x.strokeStyle='rgba('+C+',.4)';x.lineWidth=dpr;x.beginPath();x.moveTo(0,cy);x.lineTo(cx-R*1.15,cy);x.moveTo(cx+R*1.15,cy);x.lineTo(W,cy);x.stroke();
+  for(var s=-1;s<=1;s+=2)for(var k=1;k<=5;k++){var tx=cx+s*(R*1.15+k*18*dpr);x.fillStyle='rgba('+C+',.55)';x.fillRect(tx,cy-4*dpr,dpr,8*dpr)}
+  var gl=x.createRadialGradient(cx,cy,0,cx,cy,R*(1.1+N*.4));gl.addColorStop(0,'rgba('+C+','+(.35+N*.4)+')');gl.addColorStop(.55,'rgba('+C+',.08)');gl.addColorStop(1,'rgba('+C+',0)');
+  x.fillStyle=gl;x.fillRect(cx-R*1.6,cy-R*1.6,R*3.2,R*3.2);
+  x.save();x.translate(cx,cy);x.rotate(ang*.15);x.strokeStyle='rgba('+C+',.8)';x.lineWidth=dpr;x.beginPath();
+  for(var j=0;j<72;j++){var a=j*Math.PI/36,l=j%6?.03:.07;x.moveTo(Math.cos(a)*R,Math.sin(a)*R);x.lineTo(Math.cos(a)*R*(1-l),Math.sin(a)*R*(1-l))}
+  x.stroke();x.restore();arc(cx,cy,R,0,6.283,1,.5);
+  x.save();x.setLineDash([6*dpr,10*dpr]);arc(cx,cy,R*1.1,-ang*.3,-ang*.3+6.283,1,.45);x.restore();
+  arc(cx,cy,R*1.18,ang*.5,ang*.5+1.2,2,.7);arc(cx,cy,R*1.18,ang*.5+3.14,ang*.5+4.3,2,.7);
+  for(var i2=0;i2<10;i2++){var a2=-ang*.4+i2*.628;arc(cx,cy,R*.86,a2,a2+.5,5,.5+N*.4)}
+  x.fillStyle='rgba('+C+',.9)';
+  for(var q2=0;q2<4;q2++){var a3=ang*.3+q2*1.5708,sz=5*dpr;x.fillRect(cx+Math.cos(a3)*R*.93-sz/2,cy+Math.sin(a3)*R*.93-sz/2,sz,sz)}
+  arc(cx,cy,R*.76,0,6.283,1,.35);arc(cx,cy,R*.7,ang*.8,ang*.8+2.2,3,.85);arc(cx,cy,R*.7,ang*.8+3.4,ang*.8+4.6,3,.85);
+  x.globalCompositeOperation='source-over';x.fillStyle='rgba(1,10,18,.8)';x.beginPath();x.arc(cx,cy,R*.62,0,6.283);x.fill();x.globalCompositeOperation='lighter';
+  arc(cx,cy,R*.62,0,6.283,2,.7);tri(cx,cy,R*.52,Math.PI);x.lineWidth=3*dpr;x.strokeStyle='rgba('+C+',.85)';x.stroke();
+  var kk=1+N*.18;tri(cx,cy,R*.36*kk,Math.PI);x.fillStyle='rgba('+C+','+(.3+N*.5)+')';x.fill();x.lineWidth=2*dpr;x.strokeStyle='rgba('+C+',1)';x.stroke();
+  var cg=x.createRadialGradient(cx,cy,0,cx,cy,R*.2*(1+N));cg.addColorStop(0,'rgba(255,255,255,.95)');cg.addColorStop(1,'rgba('+C+',0)');
+  x.fillStyle=cg;x.beginPath();x.arc(cx,cy,R*.2*(1+N),0,6.283);x.fill()}
+ x.globalCompositeOperation='source-over'}
+try{navigator.getBattery().then(function(b){var f=function(){G.bat={level:b.level,charging:b.charging}};f();b.onlevelchange=b.onchargingchange=f}).catch(function(){})}catch(e){}
+try{dim();tele();disco();ping();setInterval(tele,1000);setInterval(ping,6000);setInterval(disco,15000);requestAnimationFrame(quadro)}catch(e){add('err','HUD: '+e.message)}
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* ===== PARTE 4: HOLOGRAMA 3D ===== */
+var H={ren:null,scn:null,cam:null,grp:null,rx:.25,ry:0,zoom:1,explo:0,exploT:0,auto:true,tops:[],tag:[],lbl:[],drag:null,w:0,h:0,v:null};
+var NM={cabeca:'CABEÇA',peito:'PEITO',bracos:'BRAÇOS',maos:'MÃOS',pernas:'PERNAS',pes:'PÉS',bloco:'BLOCO',cilindro:'CILINDRO',pistao:'PISTÃO',virabrequim:'VIRABREQUIM',sol:'SOL',orbitas:'ÓRBITAS',planetas:'PLANETAS',nucleo:'NÚCLEO',eletrons:'ELÉTRONS',fita:'FITA',bases:'BASES',ogiva:'OGIVA',corpo:'CORPO',aletas:'ALETAS',motor:'MOTOR',entrada:'ENTRADA',camadas:'CAMADAS',saida:'SAÍDA',polos:'POLOS',equador:'EQUADOR',meridianos:'MERIDIANOS'};
+function hcor(){return new THREE.Color('rgb('+G.COR+')')}
+function hm(geo,pos,rot,anc,solid){
+ var g=new THREE.Group(),c=hcor(),ad=THREE.AdditiveBlending;
+ if(!solid)g.add(new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color:c,wireframe:true,transparent:true,opacity:.55,blending:ad,depthWrite:false})));
+ g.add(new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:solid?.75:.09,blending:ad,depthWrite:false})));
+ if(pos)g.position.set(pos[0],pos[1],pos[2]);if(rot)g.rotation.set(rot[0],rot[1],rot[2]);
+ g.userData={base:g.position.clone(),anc:anc};return g}
+function put(o){H.grp.add(o);H.tag.push(o);H.tops.push(o);return o}
+var MOD={
+humano:function(){
+ var S=function(r){return new THREE.SphereGeometry(r,10,8)},Cy=function(a,b,h){return new THREE.CylinderGeometry(a,b,h,8)},B=function(w,h,d){return new THREE.BoxGeometry(w,h,d)};
+ put(hm(S(.28),[0,1.75,0],0,'cabeca'));
+ put(hm(B(.95,.85,.5),[0,1.0,0],0,'peito'));put(hm(B(.7,.5,.42),[0,.35,0],0,'peito'));
+ put(hm(new THREE.TorusGeometry(.2,.03,6,20),[0,1.05,.27],0,'peito',true));
+ [-1,1].forEach(function(s){
+  put(hm(Cy(.13,.1,.8),[s*.68,1.0,0],[0,0,s*.12],'bracos'));
+  put(hm(Cy(.1,.08,.75),[s*.8,.25,0],[0,0,s*.06],'bracos'));
+  put(hm(S(.14),[s*.84,-.2,0],0,'maos'));
+  put(hm(Cy(.18,.14,.9),[s*.24,-.5,0],0,'pernas'));
+  put(hm(Cy(.14,.1,.85),[s*.24,-1.4,0],0,'pernas'));
+  put(hm(B(.24,.14,.5),[s*.24,-1.9,.1],0,'pes'))})},
+motor:function(){
+ var Cy=function(a,b,h,n){return new THREE.CylinderGeometry(a,b,h,n||12)};
+ put(hm(new THREE.BoxGeometry(2.6,1.1,1.1),[0,-.55,0],0,'bloco'));
+ [-.9,-.3,.3,.9].forEach(function(x,i){
+  put(hm(Cy(.27,.27,1.0),[x,.5,0],0,'cilindro'));
+  var p=put(hm(Cy(.21,.21,.35),[x,.1,0],0,'pistao'));p.userData.osc=[.3,i*1.6,4]});
+ put(hm(Cy(.09,.09,2.8,8),[0,-.95,0],[0,0,1.5708],'virabrequim'));
+ put(hm(Cy(.5,.5,.14,18),[1.55,-.95,0],[0,0,1.5708],'virabrequim'));
+ put(hm(new THREE.BoxGeometry(2.7,.15,1.2),[0,1.05,0],0,'cilindro'))},
+solar:function(){
+ put(hm(new THREE.SphereGeometry(.55,14,10),[0,0,0],0,'sol'));
+ [1.1,1.65,2.2,2.75,3.3].forEach(function(r,i){
+  put(hm(new THREE.TorusGeometry(r,.008,4,72),[0,0,0],[1.5708,0,0],'orbitas',true));
+  var p=put(hm(new THREE.SphereGeometry(.09+i*.02,8,6),[r,0,0],0,'planetas',true));p.userData.orb=[r,1.2/(i+1),i*1.3]})},
+atomo:function(){
+ put(hm(new THREE.SphereGeometry(.3,10,8),[0,0,0],0,'nucleo'));
+ [[.3,.1,0],[-.15,-.2,.1],[.05,.1,-.3]].forEach(function(p){put(hm(new THREE.SphereGeometry(.2,8,6),p,0,'nucleo',true))});
+ [[1.5708,0,0],[1.5708,1.0472,0],[1.5708,-1.0472,0]].forEach(function(r,i){
+  var o=put(hm(new THREE.TorusGeometry(1.6,.01,4,72),[0,0,0],r,'orbitas',true));
+  var e=hm(new THREE.SphereGeometry(.1,8,6),[1.6,0,0],0,'eletrons',true);o.add(e);H.tag.push(e);e.userData.el=[1.6,2+i*.4,i*2]})},
+dna:function(){
+ var sg=new THREE.SphereGeometry(.09,6,5),cg=new THREE.CylinderGeometry(.025,.025,1.5,5);
+ for(var i=0;i<26;i++){var t=i*.5,y=(i-13)*.2;
+  put(hm(sg,[Math.cos(t)*.75,y,Math.sin(t)*.75],0,'fita',true));
+  put(hm(sg,[Math.cos(t+3.1416)*.75,y,Math.sin(t+3.1416)*.75],0,'fita',true));
+  if(i%2==0)put(hm(cg,[0,y,0],[0,-t,1.5708],'bases',true))}},
+foguete:function(){
+ var Cy=function(a,b,h){return new THREE.CylinderGeometry(a,b,h,12)};
+ put(hm(Cy(0,.45,1.1),[0,2.1,0],0,'ogiva'));
+ put(hm(Cy(.45,.45,2.6),[0,.25,0],0,'corpo'));
+ put(hm(new THREE.SphereGeometry(.16,8,6),[0,.7,.43],0,'corpo',true));
+ [0,2.0944,4.1888].forEach(function(a){put(hm(new THREE.BoxGeometry(.08,.9,.6),[Math.sin(a)*.6,-.8,Math.cos(a)*.6],[0,a,0],'aletas'))});
+ put(hm(Cy(.25,.4,.5),[0,-1.3,0],0,'motor'));
+ var f=put(hm(Cy(.3,0,1.1),[0,-2.0,0],0,'motor',true));f.userData.fl=1},
+rede:function(){
+ var L=[3,5,5,2],X=[-2.4,-.8,.8,2.4],NA=['entrada','camadas','camadas','saida'],pts=[],ln=[];
+ L.forEach(function(n,k){pts[k]=[];for(var i=0;i<n;i++){var y=(i-(n-1)/2)*.8;pts[k].push([X[k],y,0]);
+  var o=put(hm(new THREE.SphereGeometry(.15,8,6),[X[k],y,0],0,NA[k],true));o.userData.pul=k*.9+i*.5}});
+ for(var k=0;k<3;k++)pts[k].forEach(function(a){pts[k+1].forEach(function(b){ln.push(a[0],a[1],a[2],b[0],b[1],b[2])})});
+ var g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(ln,3));
+ H.grp.add(new THREE.LineSegments(g,new THREE.LineBasicMaterial({color:hcor(),transparent:true,opacity:.28,blending:THREE.AdditiveBlending,depthWrite:false})))},
+globo:function(){
+ put(hm(new THREE.SphereGeometry(1.8,20,14),[0,0,0],0,'meridianos'));
+ put(hm(new THREE.TorusGeometry(1.8,.015,4,80),[0,0,0],[1.5708,0,0],'equador',true));
+ [1,-1].forEach(function(s){put(hm(new THREE.CylinderGeometry(0,.14,.4,8),[0,s*2.1,0],[s>0?0:3.1416,0,0],'polos',true))})}
+};
+function dk(){document.documentElement.style.setProperty('--dk',($('#dock').offsetHeight+4)+'px')}
+addEventListener('resize',dk);
+function holoInit(){
+ if(H.ren)return true;
+ if(!window.THREE){add('err','A biblioteca 3D não carregou. Verifique a internet e recarregue.');return false}
+ var c=$('#hc');H.ren=new THREE.WebGLRenderer({canvas:c,alpha:true,antialias:true});
+ H.ren.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+ H.scn=new THREE.Scene();H.cam=new THREE.PerspectiveCamera(45,1,.1,100);H.v=new THREE.Vector3();
+ c.addEventListener('pointerdown',function(e){H.drag={x:e.clientX,y:e.clientY};H.auto=false;try{c.setPointerCapture(e.pointerId)}catch(x){}});
+ c.addEventListener('pointermove',function(e){if(!H.drag)return;H.ry+=(e.clientX-H.drag.x)*.01;H.rx=Math.max(-1.3,Math.min(1.3,H.rx+(e.clientY-H.drag.y)*.01));H.drag={x:e.clientX,y:e.clientY}});
+ var up=function(){H.drag=null};c.addEventListener('pointerup',up);c.addEventListener('pointercancel',up);
+ requestAnimationFrame(hloop);return true}
+function holoAbrir(j){
+ if(!holoInit())return;
+ if(H.grp)H.scn.remove(H.grp);
+ H.grp=new THREE.Group();H.scn.add(H.grp);H.tops=[];H.tag=[];H.explo=0;H.exploT=0;H.ry=0;H.rx=.25;H.zoom=1;H.auto=true;
+ (MOD[j.modelo]||MOD.globo)();
+ $('#ht').textContent=(j.titulo||'HOLOGRAMA').toUpperCase();
+ $('#hexp').classList.remove('on');
+ var L=$('#hl');L.innerHTML='';H.lbl=[];
+ (j.partes||[]).forEach(function(p){var d=document.createElement('div');d.className='hlb';d.textContent=NM[p.ancora]||String(p.ancora).toUpperCase();L.appendChild(d);H.lbl.push({el:d,anc:p.ancora})});
+ var inf=$('#hi');inf.innerHTML='';
+ var e=document.createElement('div');e.className='hex';e.textContent=j.explicacao||'';inf.appendChild(e);
+ (j.partes||[]).forEach(function(p){if(!p.texto)return;var d=document.createElement('div'),b=document.createElement('b');d.className='hpt';b.textContent=(NM[p.ancora]||p.ancora)+' ';d.appendChild(b);d.appendChild(document.createTextNode(p.texto));inf.appendChild(d)});
+ var tip=document.createElement('div');tip.className='hpt';tip.style.color='#5fa5b5';tip.textContent='Arraste o modelo para girar. EXPLODIR separa as peças.';inf.appendChild(tip);
+ dk();$('#holo').hidden=false}
+function holoFechar(){$('#holo').hidden=true}
+function hloop(now){requestAnimationFrame(hloop);
+ var o=$('#holo');if(o.hidden||!H.grp)return;
+ var t=now/1000,c=$('#hc'),w=c.clientWidth,h=c.clientHeight;if(!w||!h)return;
+ if(H.w!=w||H.h!=h){H.w=w;H.h=h;H.ren.setSize(w,h,false);H.cam.aspect=w/h;H.cam.updateProjectionMatrix()}
+ if(H.auto)H.ry+=.006;
+ H.grp.rotation.set(H.rx,H.ry,0);H.cam.position.set(0,0,8/H.zoom);
+ H.exploT+=(H.explo-H.exploT)*.08;var k=1+H.exploT*.9;
+ H.tops.forEach(function(p){var u=p.userData,b=u.base;
+  if(u.orb){var a=t*u.orb[1]+u.orb[2];p.position.set(Math.cos(a)*u.orb[0],0,Math.sin(a)*u.orb[0]);return}
+  p.position.set(b.x*k,b.y*k,b.z*k);
+  if(u.osc)p.position.y+=Math.sin(t*u.osc[2]+u.osc[1])*u.osc[0];
+  if(u.fl)p.scale.set(1,.7+.5*Math.abs(Math.sin(t*14)),1);
+  if(u.pul!==undefined)p.scale.set(1+.25*Math.sin(t*3+u.pul),1+.25*Math.sin(t*3+u.pul),1+.25*Math.sin(t*3+u.pul))});
+ H.tag.forEach(function(p){var u=p.userData;if(u.el){var a=t*u.el[1]+u.el[2];p.position.set(Math.cos(a)*u.el[0],Math.sin(a)*u.el[0],0)}});
+ H.ren.render(H.scn,H.cam);
+ H.lbl.forEach(function(l){var n=0,sx=0,sy=0,sz=0;
+  H.tag.forEach(function(p){if(p.userData.anc==l.anc){p.getWorldPosition(H.v);sx+=H.v.x;sy+=H.v.y;sz+=H.v.z;n++}});
+  if(!n){l.el.style.display='none';return}
+  H.v.set(sx/n,sy/n,sz/n);H.v.project(H.cam);
+  l.el.style.display='block';l.el.style.left=((H.v.x+1)/2*w)+'px';l.el.style.top=((1-H.v.y)/2*h)+'px'})}
+async function explicar(t){
+ iniciarAudio();setE('thinking');G.ctrl=new AbortController();G.S.i++;var t1=performance.now();
+ try{
+  var r=await fetch('/api/explicar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tema:t}),signal:G.ctrl.signal});
+  var j=await r.json().catch(function(){return {}});
+  if(!r.ok){G.V.chat='ERRO '+r.status;throw new Error((j.error||'Falha ao montar o holograma')+' (HTTP '+r.status+')')}
+  G.V.chat='OK '+Math.round(performance.now()-t1)+' ms';
+  G.h.push({role:'user',content:t},{role:'assistant',content:j.explicacao});
+  holoAbrir(j);addLog('assistant',j.explicacao);
+  if($('#vl').checked)await falar(j.explicacao);else setE('idle')}
+ catch(e){if(e.name!='AbortError'){add('err',e.message);setE('idle')}}
+ return 1}
+var addLog=add;
+add=function(c,t){addLog(c,t);var o=$('#holo');if(!o.hidden&&c!='acao'){var d=document.createElement('div');d.className='hex'+(c=='err'?' er':c=='user'?' us':'');d.textContent=t;$('#hi').appendChild(d);$('#hi').scrollTop=1e9}};
+on('hx',holoFechar);
+on('hexp',function(){H.explo=H.explo?0:1;this.classList.toggle('on')});
+on('hgiro',function(){H.auto=!H.auto});
+on('hzm',function(){H.zoom=Math.max(.5,H.zoom-.15)});
+on('hzp',function(){H.zoom=Math.min(2.2,H.zoom+.15)});
+</script>
+</body></html>
