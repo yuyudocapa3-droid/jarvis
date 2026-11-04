@@ -20,7 +20,7 @@ async function dailyNews(){
  const d=await r.json();
  if(!r.ok)throw new Error(d.error||'notícias indisponíveis');
  const items=d.items||[];
- const list=items.slice(0,6);
+ const list=items.slice(0,12);
  const spoken=list.slice(0,5).map((x,i)=>(i+1)+'. '+x.title+'. Fonte: '+x.source+'.').join(' ');
  const intro='Bom dia, Senhor. Aqui está o resumo das notícias mais recentes sobre São Gonçalo, Rio de Janeiro. ';
  const ending=items.length>5?' Encontrei '+items.length+' manchetes no total. As demais estão disponíveis no painel de notícias.':'';
