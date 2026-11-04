@@ -128,7 +128,7 @@ input[type=range]{accent-color:var(--c);width:80px}
    <button class="bt" id="parar" aria-label="Interromper"><svg viewBox="0 0 24 24" width="18" height="18"><rect x="5" y="5" width="14" height="14" rx="2.5" fill="currentColor"/></svg></button>
   </div>
   <div class="campo"><input type="text" id="txt" placeholder="Ex.: abre o Spotify, toca Legião Urbana" maxlength="2000" autocomplete="off"><button class="bt" id="enviar" aria-label="Enviar"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button></div>
-  <div id="ajustes" hidden><label>Volume <input type="range" id="vol" min="0" max="1" step="0.05" value="1"></label><label>Velocidade <input type="range" id="vel" min="0.7" max="1.2" step="0.05" value="1"></label><label><input type="checkbox" id="vl" checked> Voz nos atalhos</label></div>
+  <div id="ajustes" hidden><label>Volume <input type="range" id="vol" min="0" max="1" step="0.05" value="1"></label><label>Velocidade <input type="range" id="vel" min="0.7" max="1.2" step="0.05" value="1"></label><label><input type="checkbox" id="vl" checked> Voz nos atalhos</label><label><input type="checkbox" id="vnav"> Voz do navegador (grátis)</label></div>
  </div>
 </div>
 <section id="holo" hidden>
@@ -150,13 +150,27 @@ function Ctl(){this.cancelled=false}Ctl.prototype.abort=function(){this.cancelle
 function setE(s){G.e=s;document.body.setAttribute('data-s',s);$('#status').textContent=NOMES[s]}
 function add(c,t){var v=$('#vazio');if(v)v.remove();var d=document.createElement('div');d.className='m '+c;d.textContent=t;var l=$('#log');l.appendChild(d);l.scrollTop=1e9}
 function acao(rot,url){var v=$('#vazio');if(v)v.remove();var d=document.createElement('div'),a=document.createElement('a');d.className='m acao';a.className='go';a.href=url;a.textContent='ABRIR ▸ '+rot;if(/^https?:/.test(url))a.target='_blank';d.appendChild(a);$('#log').appendChild(d);$('#log').scrollTop=1e9;try{if(/^https?:/.test(url))window.open(url,'_blank');else location.href=url}catch(e){}}
-function parar(s){if(G.ctrl)G.ctrl.abort();G.ctrl=null;audio.pause();if(G.rec){G.rec.onend=G.rec.onerror=null;try{G.rec.abort()}catch(e){}G.rec=null}$('#interim').textContent='';if(!s)setE('idle')}
+function parar(s){if(G.ctrl)G.ctrl.abort();G.ctrl=null;audio.pause();try{if(window.speechSynthesis)speechSynthesis.cancel()}catch(e){}if(G.rec){G.rec.onend=G.rec.onerror=null;try{G.rec.abort()}catch(e){}G.rec=null}$('#interim').textContent='';if(!s)setE('idle')}
 function iniciarAudio(){try{if(!G.ac){G.ac=new(window.AudioContext||window.webkitAudioContext)();G.an=G.ac.createAnalyser();G.an.fftSize=64;var s=G.ac.createMediaElementSource(audio);s.connect(G.an);G.an.connect(G.ac.destination);G.dados=new Uint8Array(G.an.frequencyBinCount)}if(G.ac.state=='suspended')G.ac.resume()}catch(e){}}
+function falarNav(t){return new Promise(function(res){
+ try{var ss=window.speechSynthesis;if(!ss){setE('idle');return res()}
+  ss.cancel();var u=new SpeechSynthesisUtterance(t);u.lang='pt-BR';u.rate=+$('#vel').value||1;u.volume=+$('#vol').value;
+  var vs=ss.getVoices().filter(function(v){return /pt[-_]BR/i.test(v.lang)});
+  var m=vs.filter(function(v){return /male|masc|felipe|ricardo|daniel/i.test(v.name)})[0]||vs[0];if(m)u.voice=m;
+  u.onend=u.onerror=function(){setE('idle');res()};setE('speaking');ss.speak(u)}
+ catch(e){setE('idle');res()}})}
 async function falar(t){
- var ct=G.ctrl;
- var r=await fetch('/api/tts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:t,speed:+$('#vel').value})});
+ var ct=G.ctrl,box=$('#vnav');
+ if((box&&box.checked)||G.semEL){G.nav=true;return falarNav(t)}
+ G.nav=false;var r;
+ try{r=await fetch('/api/tts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:t,speed:+$('#vel').value})})}catch(e){r=null}
  if(ct&&ct.cancelled)return;
- if(!r.ok){G.V.tts='ERRO '+r.status;var j=await r.json().catch(function(){return {}});add('err',(j.error||'Falha ao gerar a voz')+' (HTTP '+r.status+')');setE('idle');return}
+ if(!r||!r.ok){G.V.tts=r?'ERRO '+r.status:'SEM REDE';
+  var j=r?await r.json().catch(function(){return {}}):{};
+  if(r&&(r.status==402||r.status==401))G.semEL=1;
+  if(!G.avisoVoz){G.avisoVoz=1;add('err','ElevenLabs indisponível ('+(j.error||'sem resposta')+'). Usando a voz do navegador.')}
+  if(ct&&ct.cancelled)return;
+  G.nav=true;return falarNav(t)}
  G.V.tts='OK';G.S.v++;var bl=await r.blob();if(ct&&ct.cancelled)return;var url=URL.createObjectURL(bl);audio.src=url;audio.volume=+$('#vol').value;
  audio.onended=function(){URL.revokeObjectURL(url);setE('idle')};
  if(G.ac&&G.ac.state=='suspended')await G.ac.resume().catch(function(){});setE('speaking');
@@ -281,7 +295,7 @@ function quadro(now){requestAnimationFrame(quadro);
  if(now-tf>1000){G.fps=fr;fr=0;tf=now;fh.push(G.fps/60);if(fh.length>60)fh.shift()}
  var alvo=.05+.03*Math.sin(t*1.5);
  if(G.e=='listening')alvo=.25+.12*Math.sin(t*7);else if(G.e=='thinking')alvo=.3+.1*Math.sin(t*12);
- else if(G.e=='speaking'){if(G.an&&G.dados){G.an.getByteFrequencyData(G.dados);var m=0;for(var i=0;i<G.dados.length;i++)m+=G.dados[i];alvo=Math.min(1,m/G.dados.length/100)}else alvo=.4+.3*Math.abs(Math.sin(t*9))}
+ else if(G.e=='speaking'){if(G.an&&G.dados&&!G.nav){G.an.getByteFrequencyData(G.dados);var m=0;for(var i=0;i<G.dados.length;i++)m+=G.dados[i];alvo=Math.min(1,m/G.dados.length/100)}else alvo=.4+.3*Math.abs(Math.sin(t*9))}
  G.nivel+=(alvo-G.nivel)*Math.min(1,dt*10);var N=G.nivel;
  if(now-ta>300){ta=now;vh.push(N);if(vh.length>60)vh.shift();spark('#spf',fh,1);spark('#spv',vh,1);spark('#spp',ph,1)}
  var W=cv.width,H=cv.height;x.setTransform(1,0,0,1,0,0);x.clearRect(0,0,W,H);x.globalCompositeOperation='lighter';
