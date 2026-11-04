@@ -46,6 +46,42 @@ async function weather(){
  const rain=day.precipitation_probability_max?.[0];
  return 'Em São Gonçalo, agora fazem '+Math.round(c.temperature_2m)+' graus, sensação de '+Math.round(c.apparent_temperature)+' graus, '+desc+', umidade de '+c.relative_humidity_2m+' por cento e vento de '+Math.round(c.wind_speed_10m)+' quilômetros por hora. '+(rain==null?'': 'A chance máxima de chuva hoje é de '+rain+' por cento. ')+'A máxima prevista é '+Math.round(day.temperature_2m_max[0])+' graus e a mínima '+Math.round(day.temperature_2m_min[0])+' graus.';
 }
+async function automaticMorningBriefing(){
+ const today=new Date().toLocaleDateString('en-CA',{timeZone:'America/Sao_Paulo'});
+ if(load('morning_briefing_day','')===today)return false;
+ const now=new Date(new Date().toLocaleString('en-US',{timeZone:'America/Sao_Paulo'}));
+ if(now.getHours()<7||now.getHours()>=11)return false;
+ save('morning_briefing_day',today);
+ try{
+  await dailyNews();
+  try{
+   const forecast=await weather();
+   const intro='E agora, a previsão do tempo para começar o dia. ';
+   say(intro+forecast);
+   const panel=$('#weather');
+   if(panel){
+    const temp=panel.querySelector('.big-temp');
+    const muted=panel.querySelector('.muted');
+    const rows=panel.querySelectorAll('.line-row b');
+    const match=forecast.match(/agora fazem (\\d+) graus/);
+    if(temp&&match)temp.textContent=match[1]+'°C';
+    if(muted)muted.textContent='São Gonçalo · previsão de hoje';
+    if(rows[0])rows[0].textContent='São Gonçalo, RJ';
+    if(rows[1])rows[1].textContent='Atualizado agora';
+   }
+  }catch(e){say('Não consegui consultar a previsão do tempo agora, Senhor.')}
+  return true;
+ }catch(e){
+  save('morning_briefing_day','');
+  say('Bom dia, Senhor. Tive uma falha ao montar seu briefing. O senhor pode pedir notícias de hoje para tentar novamente.');
+  return false;
+ }
+}
+function scheduleMorningBriefing(){
+ const check=()=>{automaticMorningBriefing().catch(()=>{})};
+ check();
+ setInterval(check,60000);
+}
 function notesText(){const a=load('notes',[]);return a.length?a.map((n,i)=>(i+1)+'. '+n.text).join('; '):'Não há notas salvas.'}
 function reminderList(){return load('reminders',[])}
 function notify(text){
@@ -57,6 +93,8 @@ function checkReminders(){
  if(due.length){due.forEach(x=>{x.done=true;notify(x.text)});save('reminders',all)}
 }
 setInterval(checkReminders,12000);
+// Briefing automático ao abrir o JARVIS pela manhã; só uma vez por dia.
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',scheduleMorningBriefing,{once:true});else scheduleMorningBriefing();
 async function handle(raw){
  const s=norm(raw);
  if(!s)return false;
@@ -122,5 +160,5 @@ window.cmd=async function(text){
  if(typeof previous==='function')return await previous(text);
  return false;
 };
-window.jarvisExtraCommands={version:'1.2.0',location:'São Gonçalo, RJ',list:['notícias do dia em São Gonçalo com saudação Bom dia, Senhor','clima e previsão do tempo em São Gonçalo','localização aproximada São Gonçalo','pesquisa Google','busca Spotify/YouTube','abre sites','abre configurações Wi-Fi/Bluetooth','notas locais','lembretes locais','temporizadores','hora e data','mapas']};
+window.jarvisExtraCommands={version:'1.3.0',location:'São Gonçalo, RJ',list:['notícias do dia em São Gonçalo com saudação Bom dia, Senhor','clima e previsão do tempo em São Gonçalo','localização aproximada São Gonçalo','pesquisa Google','busca Spotify/YouTube','abre sites','abre configurações Wi-Fi/Bluetooth','notas locais','lembretes locais','temporizadores','hora e data','mapas']};
 })();
