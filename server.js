@@ -1,6 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const rateLimit = require('express-rate-limit');
+const fs = require('fs');
+const path = require('path');
 
 const {
   GROQ_API_KEY, ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID,
@@ -16,7 +18,17 @@ for (const [k, v] of Object.entries({ GROQ_API_KEY, ELEVENLABS_API_KEY, ELEVENLA
 const app = express();
 app.use(express.json({ limit: '50kb' }));
 app.use('/api/', rateLimit({ windowMs: 60_000, limit: 30, message: { error: 'Muitas requisições. Aguarde um minuto.' } }));
-app.use(express.static('public'));
+
+// Injeta os comandos extras depois dos scripts originais do JARVIS, sem sobrescrever a interface existente.
+app.get('/', (req, res, next) => {
+  fs.readFile(path.join(__dirname, 'public', 'index.html'), 'utf8', (err, html) => {
+    if (err) return next(err);
+    const tag = '<script src="/commands-extra.js" defer></script>';
+    if (!html.includes(tag)) html = html.replace('</body>', tag + '\n</body>');
+    res.type('html').send(html);
+  });
+});
+app.use(express.static(path.join(__dirname, 'public')));
 
 const sistema = () => `Você é J.A.R.V.I.S., assistente pessoal do usuário. Fale sempre em português do Brasil e trate o usuário por "senhor". Seja elegante, objetivo e, quando apropriado, levemente irônico. Responda em 1 a 3 frases, a menos que peçam uma explicação mais longa; nesse caso explique de forma simples. Sua resposta será falada em voz alta: use só texto corrido, sem markdown, listas, emojis ou símbolos. Se não souber algo, diga com clareza e não invente. Você não acessa dados em tempo real além da data e hora abaixo. Agora: ${new Date().toLocaleString('pt-BR', { timeZone: FUSO_HORARIO, dateStyle: 'full', timeStyle: 'medium' })}.`;
 
