@@ -58,9 +58,9 @@ app.get('/api/news/today', async (req, res) => {
     return res.json({ location: 'São Gonçalo, RJ', updatedAt: newsCache.at, items: newsCache.items });
   }
   try {
-    const query = encodeURIComponent('"São Gonçalo" OR "Sao Goncalo"');
+    const query = encodeURIComponent('"São Gonçalo" when:1d');
     const url = 'https://news.google.com/rss/search?q=' + query +
-      '&hl=pt-BR&gl=BR&ceid=BR%3Apt-419';
+      '&hl=pt-BR&gl=BR&ceid=BR%3Apt-419&sort=date';
     const response = await fetch(url, { signal: AbortSignal.timeout(9000), headers: { 'User-Agent': 'JARVIS-News/1.0' } });
     if (!response.ok) throw new Error('Fonte de notícias respondeu ' + response.status);
     const xml = await response.text();
@@ -71,7 +71,10 @@ app.get('/api/news/today', async (req, res) => {
       const pubDate = tag(item, 'pubDate');
       const source = tag(item, 'source') || 'Google Notícias';
       return { title, link, source, publishedAt: pubDate };
-    }).filter(item => item.title && /^https:\/\//i.test(item.link)).slice(0, 12);
+    }).filter(item => {
+      const age = Date.now() - Date.parse(item.publishedAt);
+      return item.title && /^https:\/\//i.test(item.link) && Number.isFinite(age) && age >= 0 && age <= 24 * 60 * 60 * 1000;
+    }).slice(0, 12);
     if (!items.length) throw new Error('A fonte não retornou manchetes');
     newsCache = { at: Date.now(), items };
     res.json({ location: 'São Gonçalo, RJ', updatedAt: newsCache.at, items });
