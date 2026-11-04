@@ -99,6 +99,12 @@ async function handle(raw){
  const s=norm(raw);
  if(!s)return false;
 
+ if(/^(?:parar|pause|pausar|pare) (?:as )?imagens$|^(?:parar imagens|pausar imagens)$/.test(s)){window.jarvisNewsVisual?.pause();return say('Imagens pausadas, Senhor. Quando quiser, diga continuar imagens.')}
+ if(/^(?:continuar|retomar|retome|reproduzir) (?:as )?imagens$|^(?:continuar imagens|retomar imagens)$/.test(s)){window.jarvisNewsVisual?.resume();return say('Retomando a apresentação de notícias, Senhor.')}
+ if(/^(?:proxima imagem|proxima noticia|passar imagem)$/.test(s)){window.jarvisNewsVisual?.next();return say('Próxima notícia na tela, Senhor.')}
+ if(/^(?:imagem anterior|noticia anterior)$/.test(s)){window.jarvisNewsVisual?.previous();return say('Voltando à notícia anterior, Senhor.')}
+
+
  if(/^(?:bom dia|noticias|noticias de hoje|noticias do dia|noticias de sao goncalo|resumo das noticias|briefing|briefing da manha)$/.test(s)){
   try{return await dailyNews()}catch(e){return say('Bom dia, Senhor. Não consegui acessar as notícias de São Gonçalo neste momento. Tente novamente em alguns minutos.')}
  }
@@ -160,5 +166,5 @@ window.cmd=async function(text){
  if(typeof previous==='function')return await previous(text);
  return false;
 };
-window.jarvisExtraCommands={version:'1.3.0',location:'São Gonçalo, RJ',list:['notícias do dia em São Gonçalo com saudação Bom dia, Senhor','clima e previsão do tempo em São Gonçalo','localização aproximada São Gonçalo','pesquisa Google','busca Spotify/YouTube','abre sites','abre configurações Wi-Fi/Bluetooth','notas locais','lembretes locais','temporizadores','hora e data','mapas']};
+window.jarvisExtraCommands={version:'1.4.0',location:'São Gonçalo, RJ',list:['notícias do dia em São Gonçalo com saudação Bom dia, Senhor','apresentação visual automática de notícias internacionais','comandos de voz e chat para pausar, continuar e avançar imagens','clima e previsão do tempo em São Gonçalo','localização aproximada São Gonçalo','pesquisa Google','busca Spotify/YouTube','abre sites','abre configurações Wi-Fi/Bluetooth','notas locais','lembretes locais','temporizadores','hora e data','mapas']};
 })();
