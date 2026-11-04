@@ -14,6 +14,29 @@ function minsFrom(s){
  m=s.match(/(\d+)\s*(hora|horas)\b/);if(m)return +m[1]*3600000;
  return 0;
 }
+
+async function dailyNews(){
+ const r=await fetch('/api/news/today',{cache:'no-store'});
+ const d=await r.json();
+ if(!r.ok)throw new Error(d.error||'notícias indisponíveis');
+ const items=d.items||[];
+ const list=items.slice(0,6);
+ const spoken=list.slice(0,5).map((x,i)=>(i+1)+'. '+x.title+'. Fonte: '+x.source+'.').join(' ');
+ const intro='Bom dia, Senhor. Aqui está o resumo das notícias mais recentes sobre São Gonçalo, Rio de Janeiro. ';
+ const ending=items.length>5?' Encontrei '+items.length+' manchetes no total. As demais estão disponíveis no painel de notícias.':'';
+ if($('#news-list')){
+  $('#news-list').innerHTML='';
+  list.forEach(x=>{
+   const a=document.createElement('a');a.className='notice news-item';a.href=x.link;a.target='_blank';a.rel='noopener noreferrer';
+   const icon=document.createElement('i');icon.textContent='↗';
+   const span=document.createElement('span');span.textContent=x.title+' · '+x.source;
+   a.append(icon,span);$('#news-list').append(a);
+  });
+  const stamp=$('#news-updated');if(stamp)stamp.textContent='Atualizado '+new Date(d.updatedAt||Date.now()).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+ }
+ return say(intro+(spoken||'Não encontrei manchetes recentes neste momento.')+ending);
+}
+
 async function weather(){
  const url='https://api.open-meteo.com/v1/forecast?latitude=-22.8268&longitude=-43.0637&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code&timezone=America%2FSao_Paulo&forecast_days=2';
  const r=await fetch(url);if(!r.ok)throw new Error('serviço meteorológico indisponível');
@@ -37,6 +60,10 @@ setInterval(checkReminders,12000);
 async function handle(raw){
  const s=norm(raw);
  if(!s)return false;
+
+ if(/^(?:bom dia|noticias|noticias de hoje|noticias do dia|noticias de sao goncalo|resumo das noticias|briefing|briefing da manha)$/.test(s)){
+  try{return await dailyNews()}catch(e){return say('Bom dia, Senhor. Não consegui acessar as notícias de São Gonçalo neste momento. Tente novamente em alguns minutos.')}
+ }
  // Local weather for São Gonçalo, RJ
  if(/^(?:clima|tempo|previsao do tempo|como esta o tempo|como esta o clima|vai chover|temperatura|clima em sao goncalo|tempo em sao goncalo|previsao em sao goncalo)$/.test(s)){
   try{return say(await weather())}catch(e){return say('Não consegui consultar a meteorologia agora. Verifique a conexão e tente novamente.')}
@@ -95,5 +122,5 @@ window.cmd=async function(text){
  if(typeof previous==='function')return await previous(text);
  return false;
 };
-window.jarvisExtraCommands={version:'1.1.0',location:'São Gonçalo, RJ',list:['clima e previsão do tempo em São Gonçalo','localização aproximada São Gonçalo','pesquisa Google','busca Spotify/YouTube','abre sites','abre configurações Wi-Fi/Bluetooth','notas locais','lembretes locais','temporizadores','hora e data','mapas']};
+window.jarvisExtraCommands={version:'1.2.0',location:'São Gonçalo, RJ',list:['notícias do dia em São Gonçalo com saudação Bom dia, Senhor','clima e previsão do tempo em São Gonçalo','localização aproximada São Gonçalo','pesquisa Google','busca Spotify/YouTube','abre sites','abre configurações Wi-Fi/Bluetooth','notas locais','lembretes locais','temporizadores','hora e data','mapas']};
 })();
