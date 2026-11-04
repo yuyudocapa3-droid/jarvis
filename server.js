@@ -1,6 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const rateLimit = require('express-rate-limit');
+const fs = require('fs');
+const path = require('path');
 
 const {
   GROQ_API_KEY, ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID,
@@ -16,7 +18,15 @@ for (const [k, v] of Object.entries({ GROQ_API_KEY, ELEVENLABS_API_KEY, ELEVENLA
 const app = express();
 app.use(express.json({ limit: '50kb' }));
 app.use('/api/', rateLimit({ windowMs: 60_000, limit: 30, message: { error: 'Muitas requisições. Aguarde um minuto.' } }));
-app.use(express.static('public'));
+
+// Injeta os comandos extras depois dos scripts originais do JARVIS, sem sobrescrever a interface existente.
+app.get('/', (req, res, next) => {
+  fs.readFile(path.join(__dirname, 'public', 'hud-preview.html'), 'utf8', (err, html) => {
+    if (err) return next(err);
+    res.type('html').send(html);
+  });
+});
+app.use(express.static(path.join(__dirname, 'public')));
 
 const sistema = () => `Você é J.A.R.V.I.S., assistente pessoal do usuário. Fale sempre em português do Brasil e trate o usuário por "senhor". Seja elegante, objetivo e, quando apropriado, levemente irônico. Responda em 1 a 3 frases, a menos que peçam uma explicação mais longa; nesse caso explique de forma simples. Sua resposta será falada em voz alta: use só texto corrido, sem markdown, listas, emojis ou símbolos. Se não souber algo, diga com clareza e não invente. Você não acessa dados em tempo real além da data e hora abaixo. Agora: ${new Date().toLocaleString('pt-BR', { timeZone: FUSO_HORARIO, dateStyle: 'full', timeStyle: 'medium' })}.`;
 
@@ -28,6 +38,98 @@ function validar(msgs) {
   while (out.length && out[0].role !== 'user') out.shift();
   return out.length && out[out.length - 1].role === 'user' ? out : null;
 }
+
+
+const NEWS_CACHE_MS = 10 * 60 * 1000;
+let newsCache = { at: 0, items: [] };
+function xmlText(value = '') {
+  return value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    .replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
+    .replace(/&nbsp;/g, ' ').trim();
+}
+function tag(item, name) {
+  const match = item.match(new RegExp('<' + name + '(?:\\s[^>]*)?>([\\s\\S]*?)</' + name + '>', 'i'));
+  return match ? xmlText(match[1]) : '';
+}
+app.get('/api/news/today', async (req, res) => {
+  if (Date.now() - newsCache.at < NEWS_CACHE_MS && newsCache.items.length) {
+    return res.json({ location: 'São Gonçalo, RJ', updatedAt: newsCache.at, items: newsCache.items });
+  }
+  try {
+    const query = encodeURIComponent('"São Gonçalo" when:1d');
+    const url = 'https://news.google.com/rss/search?q=' + query +
+      '&hl=pt-BR&gl=BR&ceid=BR%3Apt-419&sort=date';
+    const response = await fetch(url, { signal: AbortSignal.timeout(9000), headers: { 'User-Agent': 'JARVIS-News/1.0' } });
+    if (!response.ok) throw new Error('Fonte de notícias respondeu ' + response.status);
+    const xml = await response.text();
+    const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)].map(match => {
+      const item = match[1];
+      const title = tag(item, 'title');
+      const link = tag(item, 'link');
+      const pubDate = tag(item, 'pubDate');
+      const source = tag(item, 'source') || 'Google Notícias';
+      return { title, link, source, publishedAt: pubDate };
+    }).filter(item => {
+      const age = Date.now() - Date.parse(item.publishedAt);
+      return item.title && /^https:\/\//i.test(item.link) && Number.isFinite(age) && age >= 0 && age <= 24 * 60 * 60 * 1000;
+    }).slice(0, 12);
+    if (!items.length) throw new Error('A fonte não retornou manchetes');
+    newsCache = { at: Date.now(), items };
+    res.json({ location: 'São Gonçalo, RJ', updatedAt: newsCache.at, items });
+  } catch (error) {
+    console.error('Notícias:', error.message);
+    if (newsCache.items.length) return res.json({ location: 'São Gonçalo, RJ', updatedAt: newsCache.at, stale: true, items: newsCache.items });
+    res.status(502).json({ error: 'Não consegui obter as notícias de São Gonçalo agora.' });
+  }
+});
+
+
+const WORLD_NEWS_CACHE_MS = 10 * 60 * 1000;
+let worldNewsCache = { at: 0, items: [] };
+function imageFromRss(item) {
+  const candidates = [
+    item.match(/<(?:media:content|media:thumbnail)[^>]*url=["']([^"']+)["']/i)?.[1],
+    item.match(/<enclosure[^>]*url=["']([^"']+)["'][^>]*type=["']image\//i)?.[1],
+    item.match(/<description[^>]*>([\s\S]*?)<\/description>/i)?.[1]?.match(/<img[^>]+src=["']([^"']+)["']/i)?.[1]
+  ].filter(Boolean);
+  return candidates.find(value => /^https:\/\//i.test(value)) || '';
+}
+app.get('/api/news/world', async (req, res) => {
+  if (Date.now() - worldNewsCache.at < WORLD_NEWS_CACHE_MS && worldNewsCache.items.length) {
+    return res.json({ updatedAt: worldNewsCache.at, items: worldNewsCache.items });
+  }
+  try {
+    const query = encodeURIComponent('(mundo OR internacional OR global) when:1d');
+    const url = 'https://news.google.com/rss/search?q=' + query +
+      '&hl=pt-BR&gl=BR&ceid=BR%3Apt-419&sort=date';
+    const response = await fetch(url, { signal: AbortSignal.timeout(9000), headers: { 'User-Agent': 'JARVIS-News/1.1' } });
+    if (!response.ok) throw new Error('Fonte internacional respondeu ' + response.status);
+    const xml = await response.text();
+    const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)].map(match => {
+      const item = match[1];
+      return {
+        title: tag(item, 'title'),
+        link: tag(item, 'link'),
+        source: tag(item, 'source') || 'Google Notícias',
+        publishedAt: tag(item, 'pubDate'),
+        image: imageFromRss(item)
+      };
+    }).filter(item => {
+      const age = Date.now() - Date.parse(item.publishedAt);
+      return item.title && /^https:\/\//i.test(item.link) && Number.isFinite(age) &&
+        age >= 0 && age <= 24 * 60 * 60 * 1000 && item.image;
+    }).slice(0, 12);
+    if (!items.length) throw new Error('Não foram encontradas notícias internacionais com imagens');
+    worldNewsCache = { at: Date.now(), items };
+    res.json({ updatedAt: worldNewsCache.at, items });
+  } catch (error) {
+    console.error('Notícias internacionais:', error.message);
+    if (worldNewsCache.items.length) return res.json({ updatedAt: worldNewsCache.at, stale: true, items: worldNewsCache.items });
+    res.status(502).json({ error: 'Não consegui obter notícias internacionais com imagens agora.' });
+  }
+});
 
 app.post('/api/chat', async (req, res) => {
   const messages = validar(req.body.messages);
