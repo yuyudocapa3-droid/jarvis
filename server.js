@@ -64,7 +64,7 @@ app.get('/api/news/today', async (req, res) => {
     const response = await fetch(url, { signal: AbortSignal.timeout(9000), headers: { 'User-Agent': 'JARVIS-News/1.0' } });
     if (!response.ok) throw new Error('Fonte de notícias respondeu ' + response.status);
     const xml = await response.text();
-    const items = [...xml.matchAll(/<item>([\\s\\S]*?)<\\/item>/gi)].map(match => {
+    const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)].map(match => {
       const item = match[1];
       const title = tag(item, 'title');
       const link = tag(item, 'link');
