@@ -39,6 +39,49 @@ function validar(msgs) {
   return out.length && out[out.length - 1].role === 'user' ? out : null;
 }
 
+
+const NEWS_CACHE_MS = 10 * 60 * 1000;
+let newsCache = { at: 0, items: [] };
+function xmlText(value = '') {
+  return value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    .replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
+    .replace(/&nbsp;/g, ' ').trim();
+}
+function tag(item, name) {
+  const match = item.match(new RegExp('<' + name + '(?:\\s[^>]*)?>([\\s\\S]*?)</' + name + '>', 'i'));
+  return match ? xmlText(match[1]) : '';
+}
+app.get('/api/news/today', async (req, res) => {
+  if (Date.now() - newsCache.at < NEWS_CACHE_MS && newsCache.items.length) {
+    return res.json({ location: 'São Gonçalo, RJ', updatedAt: newsCache.at, items: newsCache.items });
+  }
+  try {
+    const query = encodeURIComponent('"São Gonçalo" OR "Sao Goncalo"');
+    const url = 'https://news.google.com/rss/search?q=' + query +
+      '&hl=pt-BR&gl=BR&ceid=BR%3Apt-419';
+    const response = await fetch(url, { signal: AbortSignal.timeout(9000), headers: { 'User-Agent': 'JARVIS-News/1.0' } });
+    if (!response.ok) throw new Error('Fonte de notícias respondeu ' + response.status);
+    const xml = await response.text();
+    const items = [...xml.matchAll(/<item>([\\s\\S]*?)<\\/item>/gi)].map(match => {
+      const item = match[1];
+      const title = tag(item, 'title');
+      const link = tag(item, 'link');
+      const pubDate = tag(item, 'pubDate');
+      const source = tag(item, 'source') || 'Google Notícias';
+      return { title, link, source, publishedAt: pubDate };
+    }).filter(item => item.title && /^https:\/\//i.test(item.link)).slice(0, 12);
+    if (!items.length) throw new Error('A fonte não retornou manchetes');
+    newsCache = { at: Date.now(), items };
+    res.json({ location: 'São Gonçalo, RJ', updatedAt: newsCache.at, items });
+  } catch (error) {
+    console.error('Notícias:', error.message);
+    if (newsCache.items.length) return res.json({ location: 'São Gonçalo, RJ', updatedAt: newsCache.at, stale: true, items: newsCache.items });
+    res.status(502).json({ error: 'Não consegui obter as notícias de São Gonçalo agora.' });
+  }
+});
+
 app.post('/api/chat', async (req, res) => {
   const messages = validar(req.body.messages);
   if (!messages) return res.status(400).json({ error: 'Mensagem inválida.' });
