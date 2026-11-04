@@ -21,10 +21,8 @@ app.use('/api/', rateLimit({ windowMs: 60_000, limit: 30, message: { error: 'Mui
 
 // Injeta os comandos extras depois dos scripts originais do JARVIS, sem sobrescrever a interface existente.
 app.get('/', (req, res, next) => {
-  fs.readFile(path.join(__dirname, 'public', 'index.html'), 'utf8', (err, html) => {
+  fs.readFile(path.join(__dirname, 'public', 'hud-preview.html'), 'utf8', (err, html) => {
     if (err) return next(err);
-    const tag = '<script src="/commands-extra.js" defer></script>';
-    if (!html.includes(tag)) html = html.replace('</body>', tag + '\n</body>');
     res.type('html').send(html);
   });
 });
