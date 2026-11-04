@@ -35,15 +35,6 @@ class FloatingOverlayService : Service() {
         startForeground(NOTIFICATION_ID, buildNotification())
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (!Settings.canDrawOverlays(this)) {
-            stopSelf()
-            return START_NOT_STICKY
-        }
-        if (bubble == null) addBubble()
-        return START_STICKY
-    }
-
     private fun addBubble() {
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
