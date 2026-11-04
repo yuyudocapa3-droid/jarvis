@@ -14,6 +14,15 @@ function minsFrom(s){
  m=s.match(/(\d+)\s*(hora|horas)\b/);if(m)return +m[1]*3600000;
  return 0;
 }
+async function weather(){
+ const url='https://api.open-meteo.com/v1/forecast?latitude=-22.8268&longitude=-43.0637&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code&timezone=America%2FSao_Paulo&forecast_days=2';
+ const r=await fetch(url);if(!r.ok)throw new Error('serviço meteorológico indisponível');
+ const d=await r.json(),c=d.current,day=d.daily;
+ const codes={0:'céu limpo',1:'predominantemente limpo',2:'parcialmente nublado',3:'nublado',45:'neblina',48:'neblina com geada',51:'garoa fraca',53:'garoa moderada',55:'garoa intensa',61:'chuva fraca',63:'chuva moderada',65:'chuva forte',71:'neve fraca',73:'neve moderada',75:'neve forte',80:'pancadas fracas',81:'pancadas moderadas',82:'pancadas fortes',95:'trovoadas',96:'trovoadas com granizo',99:'trovoadas fortes com granizo'};
+ const desc=codes[c.weather_code]||'condição não identificada';
+ const rain=day.precipitation_probability_max?.[0];
+ return 'Em São Gonçalo, agora fazem '+Math.round(c.temperature_2m)+' graus, sensação de '+Math.round(c.apparent_temperature)+' graus, '+desc+', umidade de '+c.relative_humidity_2m+' por cento e vento de '+Math.round(c.wind_speed_10m)+' quilômetros por hora. '+(rain==null?'': 'A chance máxima de chuva hoje é de '+rain+' por cento. ')+'A máxima prevista é '+Math.round(day.temperature_2m_max[0])+' graus e a mínima '+Math.round(day.temperature_2m_min[0])+' graus.';
+}
 function notesText(){const a=load('notes',[]);return a.length?a.map((n,i)=>(i+1)+'. '+n.text).join('; '):'Não há notas salvas.'}
 function reminderList(){return load('reminders',[])}
 function notify(text){
@@ -28,6 +37,14 @@ setInterval(checkReminders,12000);
 async function handle(raw){
  const s=norm(raw);
  if(!s)return false;
+ // Local weather for São Gonçalo, RJ
+ if(/^(?:clima|tempo|previsao do tempo|como esta o tempo|como esta o clima|vai chover|temperatura|clima em sao goncalo|tempo em sao goncalo|previsao em sao goncalo)$/.test(s)){
+  try{return say(await weather())}catch(e){return say('Não consegui consultar a meteorologia agora. Verifique a conexão e tente novamente.')}
+ }
+ if(/^(?:onde estou|minha localizacao|qual minha localizacao)$/.test(s)){return say('A localização configurada para o senhor é São Gonçalo, no estado do Rio de Janeiro. Não tenho seu endereço exato.')}
+ if(/^(?:lugares|locais|comer|restaurantes|farmacias|mercados|postos|hospital|hospitais) perto de mim$/.test(s)){
+  const term=s.replace(/ perto de mim$/,'');open('https://www.google.com/maps/search/'+encodeURIComponent(term+' em São Gonçalo, RJ'));return say('Pesquisando '+term+' perto do senhor, em São Gonçalo.')
+ }
  // Quick information
  if(/^(que horas sao|horas|hora atual|me diga a hora)$/.test(s)){return say('Agora são '+new Date().toLocaleTimeString('pt-BR')+'.')}
  if(/^(que dia e hoje|qual a data|data de hoje|hoje e que dia)$/.test(s)){return say('Hoje é '+new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+'.')}
@@ -78,5 +95,5 @@ window.cmd=async function(text){
  if(typeof previous==='function')return await previous(text);
  return false;
 };
-window.jarvisExtraCommands={version:'1.0.0',list:['pesquisa Google','busca Spotify/YouTube','abre sites','abre configurações Wi-Fi/Bluetooth','notas locais','lembretes locais','temporizadores','hora e data','mapas']};
+window.jarvisExtraCommands={version:'1.1.0',location:'São Gonçalo, RJ',list:['clima e previsão do tempo em São Gonçalo','localização aproximada São Gonçalo','pesquisa Google','busca Spotify/YouTube','abre sites','abre configurações Wi-Fi/Bluetooth','notas locais','lembretes locais','temporizadores','hora e data','mapas']};
 })();
