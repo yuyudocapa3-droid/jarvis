@@ -146,25 +146,29 @@ var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 var NOMES={idle:'EM ESPERA',listening:'OUVINDO',thinking:'PROCESSANDO',speaking:'FALANDO'};
 var G={e:'idle',h:[],ctrl:null,rec:null,ac:null,an:null,dados:null,nivel:0,Z:1,bat:null,COR:'53,230,255',fps:60,S:{m:0,l:0,i:0,v:0,lat:[],t0:Date.now()},V:{chat:'--',tts:'--',host:'--'}};
 var audio=new Audio();
+function Ctl(){this.cancelled=false}Ctl.prototype.abort=function(){this.cancelled=true};
 function setE(s){G.e=s;document.body.setAttribute('data-s',s);$('#status').textContent=NOMES[s]}
 function add(c,t){var v=$('#vazio');if(v)v.remove();var d=document.createElement('div');d.className='m '+c;d.textContent=t;var l=$('#log');l.appendChild(d);l.scrollTop=1e9}
 function acao(rot,url){var v=$('#vazio');if(v)v.remove();var d=document.createElement('div'),a=document.createElement('a');d.className='m acao';a.className='go';a.href=url;a.textContent='ABRIR ▸ '+rot;if(/^https?:/.test(url))a.target='_blank';d.appendChild(a);$('#log').appendChild(d);$('#log').scrollTop=1e9;try{if(/^https?:/.test(url))window.open(url,'_blank');else location.href=url}catch(e){}}
 function parar(s){if(G.ctrl)G.ctrl.abort();G.ctrl=null;audio.pause();if(G.rec){G.rec.onend=G.rec.onerror=null;try{G.rec.abort()}catch(e){}G.rec=null}$('#interim').textContent='';if(!s)setE('idle')}
 function iniciarAudio(){try{if(!G.ac){G.ac=new(window.AudioContext||window.webkitAudioContext)();G.an=G.ac.createAnalyser();G.an.fftSize=64;var s=G.ac.createMediaElementSource(audio);s.connect(G.an);G.an.connect(G.ac.destination);G.dados=new Uint8Array(G.an.frequencyBinCount)}if(G.ac.state=='suspended')G.ac.resume()}catch(e){}}
 async function falar(t){
- var r=await fetch('/api/tts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:t,speed:+$('#vel').value}),signal:G.ctrl?G.ctrl.signal:undefined});
+ var ct=G.ctrl;
+ var r=await fetch('/api/tts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:t,speed:+$('#vel').value})});
+ if(ct&&ct.cancelled)return;
  if(!r.ok){G.V.tts='ERRO '+r.status;var j=await r.json().catch(function(){return {}});add('err',(j.error||'Falha ao gerar a voz')+' (HTTP '+r.status+')');setE('idle');return}
- G.V.tts='OK';G.S.v++;var url=URL.createObjectURL(await r.blob());audio.src=url;audio.volume=+$('#vol').value;
+ G.V.tts='OK';G.S.v++;var bl=await r.blob();if(ct&&ct.cancelled)return;var url=URL.createObjectURL(bl);audio.src=url;audio.volume=+$('#vol').value;
  audio.onended=function(){URL.revokeObjectURL(url);setE('idle')};
  if(G.ac&&G.ac.state=='suspended')await G.ac.resume().catch(function(){});setE('speaking');
  await audio.play().catch(function(){add('err','O navegador bloqueou o áudio. Toque no microfone e tente de novo.');setE('idle')})}
-async function dizer(t){add('assistant',t);if(!$('#vl').checked){setE('idle');return 1}G.ctrl=new AbortController();setE('thinking');try{await falar(t)}catch(e){setE('idle')}return 1}
+async function dizer(t){add('assistant',t);if(!$('#vl').checked){setE('idle');return 1}G.ctrl=new Ctl();setE('thinking');try{await falar(t)}catch(e){setE('idle')}return 1}
 async function perguntar(t){
  t=(t||'').trim();if(!t)return;parar(true);add('user',t);G.S.m++;
  try{if(window.cmd&&await window.cmd(t)){G.S.l++;return}}catch(e){add('err','Não consegui executar: '+e.message);setE('idle');return}
- G.S.i++;G.h.push({role:'user',content:t});setE('thinking');G.ctrl=new AbortController();var t1=performance.now();
- try{var r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:G.h.slice(-20)}),signal:G.ctrl.signal});
+ G.S.i++;G.h.push({role:'user',content:t});setE('thinking');G.ctrl=new Ctl();var ct=G.ctrl,t1=performance.now();
+ try{var r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:G.h.slice(-20)})});
   var j=await r.json().catch(function(){return {}}),ms=Math.round(performance.now()-t1);
+  if(ct.cancelled){G.h.pop();return}
   if(!r.ok){G.V.chat='ERRO '+r.status;throw new Error((j.error||'Falha na resposta')+' (HTTP '+r.status+')')}
   G.V.chat='OK '+ms+' ms';G.S.lat.push(ms);G.h.push({role:'assistant',content:j.text});add('assistant',j.text);await falar(j.text)}
  catch(e){if(e.name=='AbortError')return;if(e instanceof TypeError)G.V.chat='SEM REDE';if(G.h.length&&G.h[G.h.length-1].role=='user')G.h.pop();add('err',e.message);setE('idle')}}
@@ -217,7 +221,6 @@ window.cmd=async function(t){
  var n=norm(t).replace(/^(?:ei |oi |ola )?jarvis /,'').replace(/ por favor$/,''),m;
  if(/^(?:para|pare|cancela|silencio|chega)$/.test(n)){parar(false);return 1}
  if(/^(?:fecha|fechar|esconde|some com) (?:o |a )?(?:holograma|3d|modelo|visualizador)$/.test(n)){holoFechar();return dizer('Holograma encerrado, senhor.')}
- if(/^(?:como funciona|como funcionam|me explica|me explique|explica|explique|mostra em 3d|mostre em 3d|mostra o modelo|holograma|simula)\b/.test(n)||/\bem 3d\b/.test(n))return explicar(t);
  if(m=n.match(/^(?:mostra|mostrar|abre|abrir|vai pro|vai pra|vai para|ir para) (?:o |a |no |na )?(nucleo|sistema|arsenal|hud|painel|hub|menu|apps|aplicativos)$/)){pagina(/nucleo/.test(m[1])?0:/sistema|hud|painel/.test(m[1])?1:2);return dizer('Certamente, senhor.')}
  if(m=n.match(/^(aumenta|amplia|diminui|reduz)(?: o| a)? ?(?:hud|painel|interface|zoom|tela)?$/)){zoom(/aumenta|amplia/.test(m[1])?.2:-.2);return dizer('Feito, senhor.')}
  if(/^(?:ajuda|comandos|o que voce (?:sabe|pode) fazer)$/.test(n))return dizer('Posso abrir aplicativos, tocar músicas, pesquisar, traçar rotas, ligar, mandar WhatsApp, criar temporizadores e notas, calcular, ver o clima, trocar de tela e mudar a cor da interface, senhor.');
@@ -235,6 +238,7 @@ window.cmd=async function(t){
  if(m=t.toLowerCase().match(/(?:calcula|calcular|quanto (?:é|e|eh|da|dá)|quanto fica) (.+?)\??$/)){
   var e=m[1].replace(/,/g,'.').replace(/ mais /g,'+').replace(/ menos /g,'-').replace(/ vezes | x /g,'*').replace(/ dividido por /g,'/').replace(/ por cento/g,'%');
   if(/^[\d+\-*/().%\s]+$/.test(e)){var r=Function('"use strict";return ('+e.replace(/(\d+(?:\.\d+)?)%/g,'($1/100)')+')')();return dizer(e.trim()+' é igual a '+(Math.round(r*1e6)/1e6).toLocaleString('pt-BR')+', senhor.')}}
+ if(/^(?:como funciona|como funcionam|como (?:e|sao|eh) (?:feit[oa]s?|constru[ií]d[oa]s?|formad[oa]s?|por dentro)|como (?:voa|anda|nasce|surgiu|se forma|trabalha|opera|ele funciona|ela funciona)|o que (?:e|sao|eh)|me explica|me explique|explica|explique|explicar|mostra em 3d|mostre em 3d|mostra o modelo|mostra (?:um|uma|como|a anatomia|por dentro)|quero ver|holograma|simula|por que|porque)\b/.test(n)||/\bem 3d\b/.test(n))return explicar(t);
  if(/\bque horas\b|^horas$|hora certa/.test(n))return dizer('São '+new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})+', senhor.');
  if(/que dia|data de hoje|dia da semana/.test(n))return dizer('Hoje é '+new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+', senhor.');
  if(/bateria/.test(n))return dizer(G.bat?'A bateria está em '+Math.round(G.bat.level*100)+' por cento, senhor.':'Não consigo ler a bateria neste navegador, senhor.');
@@ -311,81 +315,143 @@ try{dim();tele();disco();ping();setInterval(tele,1000);setInterval(ping,6000);se
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 /* ===== PARTE 4: HOLOGRAMA 3D ===== */
-var H={ren:null,scn:null,cam:null,grp:null,rx:.25,ry:0,zoom:1,explo:0,exploT:0,auto:true,tops:[],tag:[],lbl:[],drag:null,w:0,h:0,v:null};
-var NM={cabeca:'CABEÇA',peito:'PEITO',bracos:'BRAÇOS',maos:'MÃOS',pernas:'PERNAS',pes:'PÉS',bloco:'BLOCO',cilindro:'CILINDRO',pistao:'PISTÃO',virabrequim:'VIRABREQUIM',sol:'SOL',orbitas:'ÓRBITAS',planetas:'PLANETAS',nucleo:'NÚCLEO',eletrons:'ELÉTRONS',fita:'FITA',bases:'BASES',ogiva:'OGIVA',corpo:'CORPO',aletas:'ALETAS',motor:'MOTOR',entrada:'ENTRADA',camadas:'CAMADAS',saida:'SAÍDA',polos:'POLOS',equador:'EQUADOR',meridianos:'MERIDIANOS'};
+var H={ren:null,scn:null,cam:null,grp:null,rx:.25,ry:0,zoom:1,explo:0,exploT:0,auto:true,tops:[],tag:[],lbl:[],drag:null,w:0,h:0,v:null,pulse:0,scan:null,floor:-2.2,pts:null};
+H.UT={value:0};H.UC={value:null};
+var NM={cabeca:'CABEÇA',peito:'PEITO',bracos:'BRAÇOS',pulso:'PULSO',maos:'MÃOS',pernas:'PERNAS',pes:'PÉS',capacete:'CAPACETE',reator:'REATOR',ombros:'OMBROS',repulsores:'REPULSORES',atrios:'ÁTRIOS',ventriculos:'VENTRÍCULOS',aorta:'AORTA',veias:'VEIAS',hemisferios:'HEMISFÉRIOS',cerebelo:'CEREBELO',tronco:'TRONCO',carroceria:'CARROCERIA',cabine:'CABINE',rodas:'RODAS',fuselagem:'FUSELAGEM',asas:'ASAS',cauda:'CAUDA',motores:'MOTORES',tela:'TELA',bateria:'BATERIA',processador:'PROCESSADOR',camera:'CÂMERA',paineis:'PAINÉIS',antena:'ANTENA',torre:'TORRE',gerador:'GERADOR',pas:'PÁS',bloco:'BLOCO',cilindro:'CILINDRO',pistao:'PISTÃO',virabrequim:'VIRABREQUIM',sol:'SOL',orbitas:'ÓRBITAS',planetas:'PLANETAS',nucleo:'NÚCLEO',eletrons:'ELÉTRONS',fita:'FITA',bases:'BASES',ogiva:'OGIVA',corpo:'CORPO',aletas:'ALETAS',motor:'MOTOR',entrada:'ENTRADA',camadas:'CAMADAS',saida:'SAÍDA',polos:'POLOS',equador:'EQUADOR',meridianos:'MERIDIANOS'};
+var FLOOR={humano:-2.2,armadura:-2.2,coracao:-1.8,cerebro:-1.9,carro:-.9,aviao:-1.1,celular:-1.8,satelite:-1.3,turbina:-2.1,motor:-1.4,solar:-1.2,atomo:-2,dna:-2.8,foguete:-2.4,rede:-2.2,globo:-2.4};
+var ZM={aviao:.85,satelite:.8,solar:.75,rede:.9,turbina:.9,carro:.95,motor:.95};
 function hcor(){return new THREE.Color('rgb('+G.COR+')')}
-function hm(geo,pos,rot,anc,solid){
+var VS='varying vec3 vN;varying vec3 vV;varying vec3 vW;void main(){vec4 mv=modelViewMatrix*vec4(position,1.0);vN=normalize(normalMatrix*normal);vV=normalize(-mv.xyz);vW=(modelMatrix*vec4(position,1.0)).xyz;gl_Position=projectionMatrix*mv;}';
+var FS='uniform vec3 uC;uniform float uT;uniform float uA;varying vec3 vN;varying vec3 vV;varying vec3 vW;void main(){float f=pow(1.0-abs(dot(normalize(vN),normalize(vV))),2.2);float sc=0.5+0.5*sin(vW.y*38.0-uT*2.5);float a=(0.10+0.85*f)*(0.75+0.25*sc)*uA;gl_FragColor=vec4(uC*(0.6+0.8*f),a);}';
+function holoMat(a){return new THREE.ShaderMaterial({uniforms:{uC:H.UC,uT:H.UT,uA:{value:a}},vertexShader:VS,fragmentShader:FS,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide})}
+function hm(geo,pos,rot,anc,solid,sc){
  var g=new THREE.Group(),c=hcor(),ad=THREE.AdditiveBlending;
- if(!solid)g.add(new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color:c,wireframe:true,transparent:true,opacity:.55,blending:ad,depthWrite:false})));
- g.add(new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:solid?.75:.09,blending:ad,depthWrite:false})));
- if(pos)g.position.set(pos[0],pos[1],pos[2]);if(rot)g.rotation.set(rot[0],rot[1],rot[2]);
+ if(!solid)g.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo,15),new THREE.LineBasicMaterial({color:c,transparent:true,opacity:.6,blending:ad,depthWrite:false})));
+ g.add(new THREE.Mesh(geo,holoMat(solid==1?2.2:solid==2?1.1:1.0)));
+ if(pos)g.position.set(pos[0],pos[1],pos[2]);if(rot)g.rotation.set(rot[0],rot[1],rot[2]);if(sc)g.scale.set(sc[0],sc[1],sc[2]);
  g.userData={base:g.position.clone(),anc:anc};return g}
 function put(o){H.grp.add(o);H.tag.push(o);H.tops.push(o);return o}
-var MOD={
-humano:function(){
- var S=function(r){return new THREE.SphereGeometry(r,10,8)},Cy=function(a,b,h){return new THREE.CylinderGeometry(a,b,h,8)},B=function(w,h,d){return new THREE.BoxGeometry(w,h,d)};
- put(hm(S(.28),[0,1.75,0],0,'cabeca'));
- put(hm(B(.95,.85,.5),[0,1.0,0],0,'peito'));put(hm(B(.7,.5,.42),[0,.35,0],0,'peito'));
- put(hm(new THREE.TorusGeometry(.2,.03,6,20),[0,1.05,.27],0,'peito',true));
+function lat(p,sg){return new THREE.LatheGeometry(p.map(function(q){return new THREE.Vector2(q[0],q[1])}),sg||16)}
+function limb(r1,r2,len){return lat([[0,-len/2-r2*.6],[r2*.8,-len/2-r2*.3],[r2,-len/2],[r1,len/2],[r1*.8,len/2+r1*.3],[0,len/2+r1*.6]],14)}
+function corpo(T){
+ var S=function(r){return new THREE.SphereGeometry(r,16,12)},B=function(w,h,d){return new THREE.BoxGeometry(w,h,d)};
+ put(hm(S(.3),[0,1.86,0],0,T.cab,2,[1,1.15,1.05]));
+ put(hm(S(.075),[-.12,1.9,.3],0,T.cab,1,[1.6,.6,.3]));put(hm(S(.075),[.12,1.9,.3],0,T.cab,1,[1.6,.6,.3]));
+ put(hm(limb(.1,.12,.16),[0,1.52,0],0,T.cab,2));
+ put(hm(lat([[0,-.55],[.34,-.5],[.35,-.3],[.33,0],[.4,.3],[.5,.55],[.54,.7],[.46,.82],[.2,.86],[0,.88]]),[0,.72,0],0,T.pei,2,[1,1,.58]));
+ put(hm(B(.7,.34,.1),[0,1.2,.27],0,T.pei));
+ put(hm(new THREE.TorusGeometry(.13,.028,8,24),[0,1.12,.33],0,T.pei,1));put(hm(S(.055),[0,1.12,.33],0,T.pei,1));
+ put(hm(lat([[0,-.28],[.36,-.24],[.42,0],[.38,.24],[0,.3]]),[0,0,0],0,T.per,2,[1,1,.6]));
  [-1,1].forEach(function(s){
-  put(hm(Cy(.13,.1,.8),[s*.68,1.0,0],[0,0,s*.12],'bracos'));
-  put(hm(Cy(.1,.08,.75),[s*.8,.25,0],[0,0,s*.06],'bracos'));
-  put(hm(S(.14),[s*.84,-.2,0],0,'maos'));
-  put(hm(Cy(.18,.14,.9),[s*.24,-.5,0],0,'pernas'));
-  put(hm(Cy(.14,.1,.85),[s*.24,-1.4,0],0,'pernas'));
-  put(hm(B(.24,.14,.5),[s*.24,-1.9,.1],0,'pes'))})},
+  put(hm(S(.2),[s*.63,1.42,0],0,T.bra,2));
+  put(hm(limb(.12,.1,.5),[s*.74,.98,0],[0,0,s*.1],T.bra,2));
+  put(hm(S(.1),[s*.79,.62,0],0,T.bra,2));
+  put(hm(limb(.1,.07,.46),[s*.84,.28,0],[0,0,s*.05],T.bra,2));
+  put(hm(new THREE.CylinderGeometry(.115,.115,.14,14),[s*.86,.02,0],[0,0,s*.05],T.pul,1));
+  put(hm(B(.07,.07,.14),[s*.86,.02,.12],0,T.pul,1));
+  put(hm(limb(.075,.055,.12),[s*.88,-.2,0],0,T.mao,2,[1.2,1,.8]));
+  put(hm(limb(.19,.14,.62),[s*.24,-.56,0],0,T.per,2));
+  put(hm(S(.14),[s*.25,-.98,.03],0,T.per,2));
+  put(hm(limb(.14,.09,.62),[s*.25,-1.46,0],0,T.per,2));
+  put(hm(B(.24,.14,.5),[s*.25,-1.98,.1],0,T.pes))})}
+var MOD={
+humano:function(){corpo({cab:'cabeca',pei:'peito',bra:'bracos',pul:'pulso',mao:'maos',per:'pernas',pes:'pes'})},
+armadura:function(){corpo({cab:'capacete',pei:'reator',bra:'ombros',pul:'repulsores',mao:'repulsores',per:'pernas',pes:'pernas'});
+ put(hm(new THREE.TorusGeometry(.22,.05,8,24),[0,1.12,.23],0,'reator',1));
+ put(hm(new THREE.BoxGeometry(.3,.36,.05),[0,1.82,.29],0,'capacete',1));
+ [-1,1].forEach(function(s){put(hm(new THREE.SphereGeometry(.28,10,8),[s*.7,1.47,0],0,'ombros',0,[1,.7,1]));put(hm(new THREE.CylinderGeometry(.1,.1,.03,12),[s*.8,-.3,.02],[1.5708,0,0],'repulsores',1))})},
+coracao:function(){
+ var S=function(r){return new THREE.SphereGeometry(r,14,10)},Cy=function(a,h){return new THREE.CylinderGeometry(a,a,h,10)};H.pulse=1;
+ put(hm(S(.8),[.2,-.25,0],0,'ventriculos',0,[.95,1.25,.9]));put(hm(S(.65),[-.55,-.1,.1],0,'ventriculos',0,[.9,1.1,.85]));
+ put(hm(S(.4),[.65,.8,-.1],0,'atrios'));put(hm(S(.38),[-.65,.7,0],0,'atrios'));
+ put(hm(new THREE.TorusGeometry(.45,.13,8,20,3.1416),[.05,1.2,0],0,'aorta'));put(hm(Cy(.13,.7),[.5,.9,0],0,'aorta'));
+ put(hm(Cy(.12,.9),[-.9,1.3,0],[0,0,.15],'veias'));put(hm(Cy(.12,.9),[-.5,-1.4,0],[0,0,-.1],'veias'));put(hm(Cy(.1,.8),[.9,.35,.2],[0,0,.5],'veias'))},
+cerebro:function(){
+ var S=function(r){return new THREE.SphereGeometry(r,16,12)};
+ put(hm(S(1.15),[-.55,.2,0],0,'hemisferios',0,[.85,.9,1.2]));put(hm(S(1.15),[.55,.2,0],0,'hemisferios',0,[.85,.9,1.2]));
+ put(hm(S(.65),[0,-.75,-.95],0,'cerebelo',0,[1.1,.7,.9]));
+ put(hm(new THREE.CylinderGeometry(.22,.17,1.1,10),[0,-1.1,-.35],[.35,0,0],'tronco'));
+ for(var i=0;i<16;i++){var a=i*2.4,o=put(hm(new THREE.SphereGeometry(.05,6,5),[Math.cos(a)*.85*(i%2?1:-1),.2+Math.sin(i*.83)*.7,Math.sin(a)*1.2],0,'hemisferios',1));o.userData.pul=i*.7}},
+carro:function(){
+ var Cy=function(a,b,h){return new THREE.CylinderGeometry(a,b,h,16)};
+ put(hm(new THREE.BoxGeometry(3.2,.5,1.4),[0,0,0],0,'carroceria'));put(hm(new THREE.BoxGeometry(1.6,.5,1.25),[-.2,.48,0],0,'cabine'));
+ put(hm(new THREE.BoxGeometry(.9,.4,.8),[1.0,.4,0],0,'motor',1));
+ [.5,-.5].forEach(function(z){put(hm(new THREE.SphereGeometry(.1,6,5),[1.62,.05,z],0,'carroceria',1))});
+ [[1,.75],[1,-.75],[-1,.75],[-1,-.75]].forEach(function(p){
+  var w=new THREE.Group(),s=new THREE.Group();w.position.set(p[0],-.3,p[1]);w.rotation.set(1.5708,0,0);
+  w.userData={base:w.position.clone(),anc:'rodas'};s.userData={spin:4};
+  s.add(hm(Cy(.4,.4,.22),0,0,'rodas'));s.add(hm(new THREE.BoxGeometry(.72,.05,.08),0,0,'rodas',1));s.add(hm(new THREE.BoxGeometry(.05,.72,.08),0,0,'rodas',1));
+  w.add(s);put(w);H.tag.push(s)})},
+aviao:function(){
+ var Cy=function(a,b,h){return new THREE.CylinderGeometry(a,b,h,12)},B=function(w,h,d){return new THREE.BoxGeometry(w,h,d)};
+ put(hm(Cy(.35,.35,3.6),[0,0,0],[0,0,1.5708],'fuselagem'));put(hm(Cy(0,.35,.8),[2.2,0,0],[0,0,-1.5708],'fuselagem'));put(hm(Cy(.12,.35,1.0),[-2.3,.05,0],[0,0,1.5708],'fuselagem'));
+ put(hm(B(.8,.06,4.4),[.1,-.08,0],0,'asas'));put(hm(B(.6,.8,.06),[-2.3,.55,0],[0,0,-.3],'cauda'));put(hm(B(.5,.05,1.5),[-2.3,.12,0],0,'cauda'));
+ [1.25,-1.25].forEach(function(z){put(hm(Cy(.2,.2,.8),[.35,-.35,z],[0,0,1.5708],'motores'));put(hm(new THREE.SphereGeometry(.12,6,5),[.8,-.35,z],0,'motores',1))});
+ for(var i=0;i<6;i++)put(hm(new THREE.SphereGeometry(.06,6,5),[1.1-i*.25,.12,.33],0,'fuselagem',1))},
+celular:function(){
+ var B=function(w,h,d){return new THREE.BoxGeometry(w,h,d)};
+ put(hm(B(1.5,3,.12),[0,0,0],0,'tela'));put(hm(B(1.36,2.8,.02),[0,0,.08],0,'tela',1));put(hm(B(1.1,1.4,.05),[0,-.5,-.12],0,'bateria'));
+ var c=put(hm(B(.5,.5,.04),[0,.85,-.12],0,'processador',1));c.userData.pul=0;
+ [-.35,.35].forEach(function(x){put(hm(new THREE.CylinderGeometry(.15,.15,.06,14),[x,1.15,-.2],[1.5708,0,0],'camera'))})},
+satelite:function(){
+ var B=function(w,h,d){return new THREE.BoxGeometry(w,h,d)};
+ put(hm(B(1,1,1.4),[0,0,0],0,'corpo'));
+ [-1,1].forEach(function(s){put(hm(B(2.4,.04,1.1),[s*1.95,0,0],0,'paineis'));[-.6,0,.6].forEach(function(o){put(hm(B(.03,.05,1.1),[s*(1.95+o),0,0],0,'paineis',1))})});
+ put(hm(new THREE.CylinderGeometry(.03,.03,.7,6),[0,.85,0],0,'antena',1));put(hm(new THREE.CylinderGeometry(.55,.06,.2,16),[0,1.25,0],[-.5,0,0],'antena'))},
+turbina:function(){
+ put(hm(new THREE.CylinderGeometry(.14,.26,3.7,10),[0,-.25,0],0,'torre'));put(hm(new THREE.BoxGeometry(.5,.38,.9),[0,1.75,-.05],0,'gerador'));
+ var r=new THREE.Group();r.position.set(0,1.75,.5);r.userData={base:r.position.clone(),anc:'pas',spinz:1.4};
+ r.add(hm(new THREE.SphereGeometry(.12,8,6),0,0,'pas',1));
+ [0,2.0944,4.1888].forEach(function(a){r.add(hm(new THREE.BoxGeometry(.14,1.7,.04),[-Math.sin(a)*.9,Math.cos(a)*.9,0],[0,0,a],'pas'))});
+ put(r)},
 motor:function(){
  var Cy=function(a,b,h,n){return new THREE.CylinderGeometry(a,b,h,n||12)};
  put(hm(new THREE.BoxGeometry(2.6,1.1,1.1),[0,-.55,0],0,'bloco'));
- [-.9,-.3,.3,.9].forEach(function(x,i){
-  put(hm(Cy(.27,.27,1.0),[x,.5,0],0,'cilindro'));
-  var p=put(hm(Cy(.21,.21,.35),[x,.1,0],0,'pistao'));p.userData.osc=[.3,i*1.6,4]});
- put(hm(Cy(.09,.09,2.8,8),[0,-.95,0],[0,0,1.5708],'virabrequim'));
- put(hm(Cy(.5,.5,.14,18),[1.55,-.95,0],[0,0,1.5708],'virabrequim'));
+ [-.9,-.3,.3,.9].forEach(function(x,i){put(hm(Cy(.27,.27,1.0),[x,.5,0],0,'cilindro'));var p=put(hm(Cy(.21,.21,.35),[x,.1,0],0,'pistao'));p.userData.osc=[.3,i*1.6,4]});
+ put(hm(Cy(.09,.09,2.8,8),[0,-.95,0],[0,0,1.5708],'virabrequim'));put(hm(Cy(.5,.5,.14,18),[1.55,-.95,0],[0,0,1.5708],'virabrequim'));
  put(hm(new THREE.BoxGeometry(2.7,.15,1.2),[0,1.05,0],0,'cilindro'))},
 solar:function(){
  put(hm(new THREE.SphereGeometry(.55,14,10),[0,0,0],0,'sol'));
- [1.1,1.65,2.2,2.75,3.3].forEach(function(r,i){
-  put(hm(new THREE.TorusGeometry(r,.008,4,72),[0,0,0],[1.5708,0,0],'orbitas',true));
-  var p=put(hm(new THREE.SphereGeometry(.09+i*.02,8,6),[r,0,0],0,'planetas',true));p.userData.orb=[r,1.2/(i+1),i*1.3]})},
+ [1.1,1.65,2.2,2.75,3.3].forEach(function(r,i){put(hm(new THREE.TorusGeometry(r,.008,4,72),[0,0,0],[1.5708,0,0],'orbitas',1));var p=put(hm(new THREE.SphereGeometry(.09+i*.02,8,6),[r,0,0],0,'planetas',1));p.userData.orb=[r,1.2/(i+1),i*1.3]})},
 atomo:function(){
  put(hm(new THREE.SphereGeometry(.3,10,8),[0,0,0],0,'nucleo'));
- [[.3,.1,0],[-.15,-.2,.1],[.05,.1,-.3]].forEach(function(p){put(hm(new THREE.SphereGeometry(.2,8,6),p,0,'nucleo',true))});
+ [[.3,.1,0],[-.15,-.2,.1],[.05,.1,-.3]].forEach(function(p){put(hm(new THREE.SphereGeometry(.2,8,6),p,0,'nucleo',1))});
  [[1.5708,0,0],[1.5708,1.0472,0],[1.5708,-1.0472,0]].forEach(function(r,i){
-  var o=put(hm(new THREE.TorusGeometry(1.6,.01,4,72),[0,0,0],r,'orbitas',true));
-  var e=hm(new THREE.SphereGeometry(.1,8,6),[1.6,0,0],0,'eletrons',true);o.add(e);H.tag.push(e);e.userData.el=[1.6,2+i*.4,i*2]})},
+  var o=put(hm(new THREE.TorusGeometry(1.6,.01,4,72),[0,0,0],r,'orbitas',1));
+  var e=hm(new THREE.SphereGeometry(.1,8,6),[1.6,0,0],0,'eletrons',1);o.add(e);H.tag.push(e);e.userData.el=[1.6,2+i*.4,i*2]})},
 dna:function(){
  var sg=new THREE.SphereGeometry(.09,6,5),cg=new THREE.CylinderGeometry(.025,.025,1.5,5);
  for(var i=0;i<26;i++){var t=i*.5,y=(i-13)*.2;
-  put(hm(sg,[Math.cos(t)*.75,y,Math.sin(t)*.75],0,'fita',true));
-  put(hm(sg,[Math.cos(t+3.1416)*.75,y,Math.sin(t+3.1416)*.75],0,'fita',true));
-  if(i%2==0)put(hm(cg,[0,y,0],[0,-t,1.5708],'bases',true))}},
+  put(hm(sg,[Math.cos(t)*.75,y,Math.sin(t)*.75],0,'fita',1));put(hm(sg,[Math.cos(t+3.1416)*.75,y,Math.sin(t+3.1416)*.75],0,'fita',1));
+  if(i%2==0)put(hm(cg,[0,y,0],[0,-t,1.5708],'bases',1))}},
 foguete:function(){
  var Cy=function(a,b,h){return new THREE.CylinderGeometry(a,b,h,12)};
- put(hm(Cy(0,.45,1.1),[0,2.1,0],0,'ogiva'));
- put(hm(Cy(.45,.45,2.6),[0,.25,0],0,'corpo'));
- put(hm(new THREE.SphereGeometry(.16,8,6),[0,.7,.43],0,'corpo',true));
+ put(hm(Cy(0,.45,1.1),[0,2.1,0],0,'ogiva'));put(hm(Cy(.45,.45,2.6),[0,.25,0],0,'corpo'));put(hm(new THREE.SphereGeometry(.16,8,6),[0,.7,.43],0,'corpo',1));
  [0,2.0944,4.1888].forEach(function(a){put(hm(new THREE.BoxGeometry(.08,.9,.6),[Math.sin(a)*.6,-.8,Math.cos(a)*.6],[0,a,0],'aletas'))});
- put(hm(Cy(.25,.4,.5),[0,-1.3,0],0,'motor'));
- var f=put(hm(Cy(.3,0,1.1),[0,-2.0,0],0,'motor',true));f.userData.fl=1},
+ put(hm(Cy(.25,.4,.5),[0,-1.3,0],0,'motor'));var f=put(hm(Cy(.3,0,1.1),[0,-2.0,0],0,'motor',1));f.userData.fl=1},
 rede:function(){
  var L=[3,5,5,2],X=[-2.4,-.8,.8,2.4],NA=['entrada','camadas','camadas','saida'],pts=[],ln=[];
- L.forEach(function(n,k){pts[k]=[];for(var i=0;i<n;i++){var y=(i-(n-1)/2)*.8;pts[k].push([X[k],y,0]);
-  var o=put(hm(new THREE.SphereGeometry(.15,8,6),[X[k],y,0],0,NA[k],true));o.userData.pul=k*.9+i*.5}});
+ L.forEach(function(n,k){pts[k]=[];for(var i=0;i<n;i++){var y=(i-(n-1)/2)*.8;pts[k].push([X[k],y,0]);var o=put(hm(new THREE.SphereGeometry(.15,8,6),[X[k],y,0],0,NA[k],1));o.userData.pul=k*.9+i*.5}});
  for(var k=0;k<3;k++)pts[k].forEach(function(a){pts[k+1].forEach(function(b){ln.push(a[0],a[1],a[2],b[0],b[1],b[2])})});
  var g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(ln,3));
  H.grp.add(new THREE.LineSegments(g,new THREE.LineBasicMaterial({color:hcor(),transparent:true,opacity:.28,blending:THREE.AdditiveBlending,depthWrite:false})))},
 globo:function(){
- put(hm(new THREE.SphereGeometry(1.8,20,14),[0,0,0],0,'meridianos'));
- put(hm(new THREE.TorusGeometry(1.8,.015,4,80),[0,0,0],[1.5708,0,0],'equador',true));
- [1,-1].forEach(function(s){put(hm(new THREE.CylinderGeometry(0,.14,.4,8),[0,s*2.1,0],[s>0?0:3.1416,0,0],'polos',true))})}
+ put(hm(new THREE.SphereGeometry(1.8,20,14),[0,0,0],0,'meridianos'));put(hm(new THREE.TorusGeometry(1.8,.015,4,80),[0,0,0],[1.5708,0,0],'equador',1));
+ [1,-1].forEach(function(s){put(hm(new THREE.CylinderGeometry(0,.14,.4,8),[0,s*2.1,0],[s>0?0:3.1416,0,0],'polos',1))})}
 };
+function plataforma(y){
+ var g=new THREE.Group(),c=hcor(),ad=THREE.AdditiveBlending,mt=function(o){return new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:o,blending:ad,depthWrite:false})};
+ [1.2,1.9,2.6].forEach(function(r,i){var m=new THREE.Mesh(new THREE.TorusGeometry(r,.012,4,80),mt(.75-i*.18));m.rotation.x=1.5708;m.position.y=y;g.add(m)});
+ var p=[];for(var i=0;i<24;i++){var a=i*.2618;p.push(Math.cos(a)*1.2,y,Math.sin(a)*1.2,Math.cos(a)*2.6,y,Math.sin(a)*2.6)}
+ var bg=new THREE.BufferGeometry();bg.setAttribute('position',new THREE.Float32BufferAttribute(p,3));
+ g.add(new THREE.LineSegments(bg,new THREE.LineBasicMaterial({color:c,transparent:true,opacity:.3,blending:ad,depthWrite:false})));
+ H.scan=new THREE.Mesh(new THREE.TorusGeometry(2.2,.02,4,80),mt(.9));H.scan.rotation.x=1.5708;g.add(H.scan);return g}
 function dk(){document.documentElement.style.setProperty('--dk',($('#dock').offsetHeight+4)+'px')}
 addEventListener('resize',dk);
 function holoInit(){
  if(H.ren)return true;
  if(!window.THREE){add('err','A biblioteca 3D não carregou. Verifique a internet e recarregue.');return false}
- var c=$('#hc');H.ren=new THREE.WebGLRenderer({canvas:c,alpha:true,antialias:true});
+ try{var c=$('#hc');H.ren=new THREE.WebGLRenderer({canvas:c,alpha:true,antialias:true})}catch(e){add('err','Este aparelho não conseguiu iniciar o 3D (WebGL).');return false}
  H.ren.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
  H.scn=new THREE.Scene();H.cam=new THREE.PerspectiveCamera(45,1,.1,100);H.v=new THREE.Vector3();
  c.addEventListener('pointerdown',function(e){H.drag={x:e.clientX,y:e.clientY};H.auto=false;try{c.setPointerCapture(e.pointerId)}catch(x){}});
@@ -394,11 +460,14 @@ function holoInit(){
  requestAnimationFrame(hloop);return true}
 function holoAbrir(j){
  if(!holoInit())return;
- if(H.grp)H.scn.remove(H.grp);
- H.grp=new THREE.Group();H.scn.add(H.grp);H.tops=[];H.tag=[];H.explo=0;H.exploT=0;H.ry=0;H.rx=.25;H.zoom=1;H.auto=true;
- (MOD[j.modelo]||MOD.globo)();
- $('#ht').textContent=(j.titulo||'HOLOGRAMA').toUpperCase();
- $('#hexp').classList.remove('on');
+ if(H.grp){H.grp.traverse(function(o){if(o.geometry&&o.geometry.dispose)o.geometry.dispose();if(o.material&&o.material.dispose)o.material.dispose()});H.scn.remove(H.grp)}
+ H.grp=new THREE.Group();H.scn.add(H.grp);H.tops=[];H.tag=[];H.explo=0;H.exploT=0;H.ry=0;H.rx=.25;H.auto=true;H.pulse=0;
+ var k=MOD[j.modelo]?j.modelo:'globo';H.zoom=ZM[k]||1;H.floor=FLOOR[k]||-2.2;
+ H.UC.value=hcor();MOD[k]();H.grp.add(plataforma(H.floor));
+ var pa=[];for(var i=0;i<140;i++){var a=Math.random()*6.283,r=1.5+Math.random()*2.2;pa.push(Math.cos(a)*r,(Math.random()-.5)*6,Math.sin(a)*r)}
+ var pg=new THREE.BufferGeometry();pg.setAttribute('position',new THREE.Float32BufferAttribute(pa,3));
+ H.pts=new THREE.Points(pg,new THREE.PointsMaterial({color:hcor(),size:.04,transparent:true,opacity:.6,blending:THREE.AdditiveBlending,depthWrite:false}));H.grp.add(H.pts);
+ $('#ht').textContent=(j.titulo||'HOLOGRAMA').toUpperCase();$('#hexp').classList.remove('on');
  var L=$('#hl');L.innerHTML='';H.lbl=[];
  (j.partes||[]).forEach(function(p){var d=document.createElement('div');d.className='hlb';d.textContent=NM[p.ancora]||String(p.ancora).toUpperCase();L.appendChild(d);H.lbl.push({el:d,anc:p.ancora})});
  var inf=$('#hi');inf.innerHTML='';
@@ -411,33 +480,46 @@ function hloop(now){requestAnimationFrame(hloop);
  var o=$('#holo');if(o.hidden||!H.grp)return;
  var t=now/1000,c=$('#hc'),w=c.clientWidth,h=c.clientHeight;if(!w||!h)return;
  if(H.w!=w||H.h!=h){H.w=w;H.h=h;H.ren.setSize(w,h,false);H.cam.aspect=w/h;H.cam.updateProjectionMatrix()}
- if(H.auto)H.ry+=.006;
+ H.UT.value=t;if(H.auto)H.ry+=.006;
  H.grp.rotation.set(H.rx,H.ry,0);H.cam.position.set(0,0,8/H.zoom);
+ var ps=H.pulse?1+.07*Math.pow(Math.max(0,Math.sin(t*6)),2):1;H.grp.scale.set(ps,ps,ps);
  H.exploT+=(H.explo-H.exploT)*.08;var k=1+H.exploT*.9;
  H.tops.forEach(function(p){var u=p.userData,b=u.base;
   if(u.orb){var a=t*u.orb[1]+u.orb[2];p.position.set(Math.cos(a)*u.orb[0],0,Math.sin(a)*u.orb[0]);return}
   p.position.set(b.x*k,b.y*k,b.z*k);
   if(u.osc)p.position.y+=Math.sin(t*u.osc[2]+u.osc[1])*u.osc[0];
   if(u.fl)p.scale.set(1,.7+.5*Math.abs(Math.sin(t*14)),1);
-  if(u.pul!==undefined)p.scale.set(1+.25*Math.sin(t*3+u.pul),1+.25*Math.sin(t*3+u.pul),1+.25*Math.sin(t*3+u.pul))});
- H.tag.forEach(function(p){var u=p.userData;if(u.el){var a=t*u.el[1]+u.el[2];p.position.set(Math.cos(a)*u.el[0],Math.sin(a)*u.el[0],0)}});
+  if(u.pul!==undefined){var s=1+.25*Math.sin(t*3+u.pul);p.scale.set(s,s,s)}});
+ H.tag.forEach(function(p){var u=p.userData;
+  if(u.el){var a=t*u.el[1]+u.el[2];p.position.set(Math.cos(a)*u.el[0],Math.sin(a)*u.el[0],0)}
+  if(u.spin)p.rotation.y=t*u.spin;
+  if(u.spinz)p.rotation.z=t*u.spinz});
+ if(H.scan)H.scan.position.y=H.floor+((t*.45)%1)*Math.abs(H.floor)*1.9;
+ if(H.pts)H.pts.rotation.y+=.002;
  H.ren.render(H.scn,H.cam);
  H.lbl.forEach(function(l){var n=0,sx=0,sy=0,sz=0;
   H.tag.forEach(function(p){if(p.userData.anc==l.anc){p.getWorldPosition(H.v);sx+=H.v.x;sy+=H.v.y;sz+=H.v.z;n++}});
   if(!n){l.el.style.display='none';return}
   H.v.set(sx/n,sy/n,sz/n);H.v.project(H.cam);
   l.el.style.display='block';l.el.style.left=((H.v.x+1)/2*w)+'px';l.el.style.top=((1-H.v.y)/2*h)+'px'})}
+async function respIA(t){
+ G.h.push({role:'user',content:t});setE('thinking');G.ctrl=new Ctl();var ct=G.ctrl;
+ try{var r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:G.h.slice(-20)})});
+  var j=await r.json().catch(function(){return {}});if(ct.cancelled){G.h.pop();return}if(!r.ok)throw new Error((j.error||'Falha na resposta')+' (HTTP '+r.status+')');
+  G.h.push({role:'assistant',content:j.text});add('assistant',j.text);if($('#vl').checked)await falar(j.text);else setE('idle')}
+ catch(e){if(G.h.length&&G.h[G.h.length-1].role=='user')G.h.pop();if(e.name!='AbortError'){add('err',e.message);setE('idle')}}}
 async function explicar(t){
- iniciarAudio();setE('thinking');G.ctrl=new AbortController();G.S.i++;var t1=performance.now();
+ iniciarAudio();setE('thinking');G.ctrl=new Ctl();var ct=G.ctrl;G.S.i++;var t1=performance.now();
  try{
-  var r=await fetch('/api/explicar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tema:t}),signal:G.ctrl.signal});
+  var r=await fetch('/api/explicar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tema:t})});
   var j=await r.json().catch(function(){return {}});
+  if(ct.cancelled)return 1;
   if(!r.ok){G.V.chat='ERRO '+r.status;throw new Error((j.error||'Falha ao montar o holograma')+' (HTTP '+r.status+')')}
   G.V.chat='OK '+Math.round(performance.now()-t1)+' ms';
   G.h.push({role:'user',content:t},{role:'assistant',content:j.explicacao});
   holoAbrir(j);addLog('assistant',j.explicacao);
   if($('#vl').checked)await falar(j.explicacao);else setE('idle')}
- catch(e){if(e.name!='AbortError'){add('err',e.message);setE('idle')}}
+ catch(e){if(e.name!='AbortError'){add('err','Holograma indisponível ('+e.message+'). Respondendo sem 3D.');await respIA(t)}}
  return 1}
 var addLog=add;
 add=function(c,t){addLog(c,t);var o=$('#holo');if(!o.hidden&&c!='acao'){var d=document.createElement('div');d.className='hex'+(c=='err'?' er':c=='user'?' us':'');d.textContent=t;$('#hi').appendChild(d);$('#hi').scrollTop=1e9}};
