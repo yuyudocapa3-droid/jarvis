@@ -85,6 +85,52 @@ app.get('/api/news/today', async (req, res) => {
   }
 });
 
+
+const WORLD_NEWS_CACHE_MS = 10 * 60 * 1000;
+let worldNewsCache = { at: 0, items: [] };
+function imageFromRss(item) {
+  const candidates = [
+    item.match(/<(?:media:content|media:thumbnail)[^>]*url=["']([^"']+)["']/i)?.[1],
+    item.match(/<enclosure[^>]*url=["']([^"']+)["'][^>]*type=["']image\//i)?.[1],
+    item.match(/<description[^>]*>([\s\S]*?)<\/description>/i)?.[1]?.match(/<img[^>]+src=["']([^"']+)["']/i)?.[1]
+  ].filter(Boolean);
+  return candidates.find(value => /^https:\/\//i.test(value)) || '';
+}
+app.get('/api/news/world', async (req, res) => {
+  if (Date.now() - worldNewsCache.at < WORLD_NEWS_CACHE_MS && worldNewsCache.items.length) {
+    return res.json({ updatedAt: worldNewsCache.at, items: worldNewsCache.items });
+  }
+  try {
+    const query = encodeURIComponent('(mundo OR internacional OR global) when:1d');
+    const url = 'https://news.google.com/rss/search?q=' + query +
+      '&hl=pt-BR&gl=BR&ceid=BR%3Apt-419&sort=date';
+    const response = await fetch(url, { signal: AbortSignal.timeout(9000), headers: { 'User-Agent': 'JARVIS-News/1.1' } });
+    if (!response.ok) throw new Error('Fonte internacional respondeu ' + response.status);
+    const xml = await response.text();
+    const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)].map(match => {
+      const item = match[1];
+      return {
+        title: tag(item, 'title'),
+        link: tag(item, 'link'),
+        source: tag(item, 'source') || 'Google Notícias',
+        publishedAt: tag(item, 'pubDate'),
+        image: imageFromRss(item)
+      };
+    }).filter(item => {
+      const age = Date.now() - Date.parse(item.publishedAt);
+      return item.title && /^https:\/\//i.test(item.link) && Number.isFinite(age) &&
+        age >= 0 && age <= 24 * 60 * 60 * 1000 && item.image;
+    }).slice(0, 12);
+    if (!items.length) throw new Error('Não foram encontradas notícias internacionais com imagens');
+    worldNewsCache = { at: Date.now(), items };
+    res.json({ updatedAt: worldNewsCache.at, items });
+  } catch (error) {
+    console.error('Notícias internacionais:', error.message);
+    if (worldNewsCache.items.length) return res.json({ updatedAt: worldNewsCache.at, stale: true, items: worldNewsCache.items });
+    res.status(502).json({ error: 'Não consegui obter notícias internacionais com imagens agora.' });
+  }
+});
+
 app.post('/api/chat', async (req, res) => {
   const messages = validar(req.body.messages);
   if (!messages) return res.status(400).json({ error: 'Mensagem inválida.' });
